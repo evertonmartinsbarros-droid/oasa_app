@@ -8,8 +8,8 @@ services:
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /status
     envVars:
-      - key: SHEET_IDS_LEITURAS
-        value: "1iPcUbhIqgEpkhjLo5_HcbmNWlsqlEjY24NvRj3F-3u4,1zoca61vK-f4t0s4Utj7vDtuUNdDHp_B826xxMsOdZCs"
+      - key: SHEET_ID_LEITURAS
+        value: "1iPcUbhIqgEpkhjLo5_HcbmNWlsqlEjY24NvRj3F-3u4"
       - key: SHEET_ID_PARTICULARIDADES
         value: "1rYXoJNGvgZQhWOZNpbPZEblxE8Srkn7IC0Jz5gBPV0Y"
       - key: ABA_LEITURAS
@@ -19,23 +19,14 @@ services:
       - key: CACHE_TTL
         value: "300"
       - key: GOOGLE_CREDENTIALS_JSON
-        sync: false   # preencher manualmente no Render Dashboard
+        sync: false
 
   - type: web
     name: oasa-frontend
     runtime: static
     rootDir: frontend
-    # Gera config.js com a URL pública do backend ANTES de publicar os arquivos
-    # estáticos. Isso evita ter que editar index.html manualmente a cada deploy.
     buildCommand: echo "window.OASA_API_BASE='$API_BASE_URL';" > config.js
     staticPublishPath: .
     envVars:
       - key: API_BASE_URL
-        sync: false   # preencher com a URL pública do oasa-backend (ex: https://oasa-backend.onrender.com)
-                       # IMPORTANTE: o backend precisa ser criado primeiro para você saber a URL real —
-                       # veja o passo a passo no README.
-
-
-                       # IMPORTANTE: o backend precisa ser criado primeiro para você saber a URL real —
-                       # veja o passo a passo no README.
-
+        sync: false
