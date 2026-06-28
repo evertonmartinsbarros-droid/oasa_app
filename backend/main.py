@@ -5,7 +5,7 @@ from typing import Optional
 import asyncio
 import os
 import math
-import FastAPI()
+
 import pandas as pd
 import numpy as np
 from etl import carregar_dados, get_cache_info
