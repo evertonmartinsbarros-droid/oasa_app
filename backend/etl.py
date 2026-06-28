@@ -60,16 +60,6 @@ def _normalizar_chave(v) -> Optional[str]:
     return "".join(c for c in t if not unicodedata.combining(c)).upper().strip()
 
 
-def _para_numero(v, limit=None) -> Optional[float]:
-    if pd.isna(v) or str(v).strip() == "": return None
-    try:
-        r = float(str(v).strip().replace(",", "."))
-        if limit is not None and abs(r) > limit: return None
-        return r
-    except:
-        return None
-
-
 def _ler_sheet(service, sheet_id: str, aba: str, colunas_filtro=None) -> pd.DataFrame:
     result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=aba).execute()
     values = result.get("values", [])
@@ -104,8 +94,8 @@ def _carregar_particularidades(service) -> pd.DataFrame:
         if "Cidade_Norm" not in df_part.columns or "Sistema_Norm" not in df_part.columns:
             return pd.DataFrame(columns=["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo", "Percentual_Desconto"])
 
-        df_part["Cidade_Norm"]  = df_part["Cidade_Norm"].apply(_normalizar_chave).astype("category")
-        df_part["Sistema_Norm"] = df_part["Sistema_Norm"].apply(_normalizar_chave).astype("category")
+        df_part["Cidade_Norm"]  = df_part["Cidade_Norm"].apply(_normalizar_chave)
+        df_part["Sistema_Norm"] = df_part["Sistema_Norm"].apply(_normalizar_chave)
 
         if "Percentual_Desconto" in df_part.columns:
             df_part["Percentual_Desconto"] = pd.to_numeric(
@@ -212,13 +202,15 @@ def _executar_etl() -> pd.DataFrame:
     del frames
     gc.collect()
 
+    # Limpeza de texto — mantém como string pura (NÃO converte para category ainda)
+    # O Pandas 3.x remove colunas category do resultado do groupby
     col_str = ["Pólo", "Cidade", "Sistema", "Gerência"]
     for col in col_str:
         if col in df.columns:
-            df[col] = df[col].apply(_limpar_texto).astype("category")
+            df[col] = df[col].apply(_limpar_texto)
 
     if "Gerência" not in df.columns:
-        df["Gerência"] = pd.Series(["OASA"] * len(df), dtype="category")
+        df["Gerência"] = "OASA"
 
     df["Data_Hora"] = pd.to_datetime(
         df.get("Data/Hora (Leitura)", pd.Series(dtype="object")),
@@ -245,41 +237,23 @@ def _executar_etl() -> pd.DataFrame:
 
     df = df.sort_values("Data_Hora")
 
-    # ── CORREÇÃO: salva mapeamento Cidade+Sistema → Pólo+Gerência ANTES do groupby
-    # O Pandas 3.x remove colunas de categoria do resultado quando usadas como chave
-    mapa_polo = df.groupby(["Cidade", "Sistema"], observed=True)[["Pólo", "Gerência"]].first().reset_index()
-
-    # Filtra uma leitura por dia (mantém a última)
+    # groupby com strings — Pandas 3.x preserva colunas string no resultado
     df = df.groupby(["Cidade", "Sistema", "Data"], as_index=False).last()
 
-    # Restaura Pólo e Gerência via merge
-    df = df.drop(columns=["Pólo", "Gerência"], errors="ignore")
-    df = df.merge(mapa_polo, on=["Cidade", "Sistema"], how="left")
+    # Converte para category DEPOIS do groupby
+    for col in col_str:
+        if col in df.columns:
+            df[col] = df[col].astype("category")
 
-    df["Cidade_Norm"]  = df["Cidade"].apply(_normalizar_chave).astype("category")
-    df["Sistema_Norm"] = df["Sistema"].apply(_normalizar_chave).astype("category")
+    df["Cidade_Norm"]  = df["Cidade"].apply(_normalizar_chave)
+    df["Sistema_Norm"] = df["Sistema"].apply(_normalizar_chave)
 
     part = _carregar_particularidades(service)
     df = df.merge(part, on=["Cidade_Norm", "Sistema_Norm"], how="left")
     df["Tipo_Regra_Calculo"] = df["Tipo_Regra_Calculo"].fillna("SEM_REGRA").astype("category")
 
-    # ── CORREÇÃO (Pandas >=2.2 / 3.0): groupby(...).apply() exclui por padrão as
-    # colunas usadas como chave do dataframe entregue à função (em pandas 3.0,
-    # include_groups=True foi removido — a exclusão é sempre obrigatória).
-    # Por isso "Pólo", "Cidade" e "Sistema" desapareciam do resultado final.
-    # Solução: agrupar por uma chave sintética (string concatenada) que não é
-    # nenhuma das colunas reais, assim elas seguem como colunas normais e não
-    # são excluídas pelo apply(). Evitar tupla de categóricos como chave —
-    # use string simples (mais estável entre versões do pandas).
-    df["_grupo_chave"] = (
-        df["Pólo"].astype(str) + "|" + df["Cidade"].astype(str) + "|" + df["Sistema"].astype(str)
-    )
-    df = (
-        df.groupby("_grupo_chave", group_keys=False, observed=True)
-          .apply(_calcular_grupo, include_groups=False)
-          .reset_index(drop=True)
-    )
-    df = df.drop(columns=["_grupo_chave"], errors="ignore")
+    chave = ["Pólo", "Cidade", "Sistema"]
+    df = df.groupby(chave, group_keys=False, observed=True).apply(_calcular_grupo).reset_index(drop=True)
 
     qual_cols = ["Cloro (mg/L)", "Cor (uH)", "Fluoreto (mg/L)", "Turbidez (uT)"]
     for col in qual_cols:
