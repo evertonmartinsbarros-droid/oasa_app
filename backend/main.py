@@ -1,235 +1,335 @@
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
+"""
+ETL OASA — lê Google Sheets, replica Power Query, calcula produção/qualidade.
+Cache em memória com TTL de 5 minutos para não bater a API a cada request.
+"""
+import os, re, unicodedata, time, json
 from typing import Optional
-import asyncio
-import os
-from etl import carregar_dados, get_cache_info
+import pandas as pd
+import numpy as np
+from dotenv import load_dotenv
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Carrega dados em background ao iniciar o servidor
-    asyncio.create_task(carregar_em_background())
-    yield
+load_dotenv()
 
-async def carregar_em_background():
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, carregar_dados)
+# ── Configuração ──────────────────────────────────────────────────────────────
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+]
 
-app = FastAPI(title="OASA Dashboard API", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+_ids_leituras_env = os.getenv(
+    "SHEET_IDS_LEITURAS",
+    "1iPcUbhIqgEpkhjLo5_HcbmNWlsqlEjY24NvRj3F-3u4,1zoca61vK-f4t0s4Utj7vDtuUNdDHp_B826xxMsOdZCs"
 )
+SHEET_IDS_LEITURAS        = [s.strip() for s in _ids_leituras_env.split(",") if s.strip()]
+SHEET_ID_PARTICULARIDADES = os.getenv("SHEET_ID_PARTICULARIDADES", "1rYXoJNGvgZQhWOZNpbPZEblxE8Srkn7IC0Jz5gBPV0Y")
+ABA_LEITURAS              = os.getenv("ABA_LEITURAS", "Registos")
+ABA_PARTICULARIDADES      = os.getenv("ABA_PARTICULARIDADES", "04_Chaves_Merge")
+CACHE_TTL_SEGUNDOS        = int(os.getenv("CACHE_TTL", "300"))
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# Apenas colunas necessárias — reduz memória pela metade
+COLUNAS_LEITURAS = [
+    "Data/Hora (Leitura)", "Gerência", "Pólo", "Cidade", "Sistema",
+    "Macro Entrada", "Macro Saída ", "Macro Processo", "Horímetro",
+    "Turbidez (uT)", "Cor (uH)", "Cloro (mg/L)", "Fluoreto (mg/L)",
+]
 
-def filtrar(df, gerencia=None, polo=None, cidade=None, sistema=None,
-            data_ini=None, data_fim=None):
-    if gerencia:
-        df = df[df["Gerência"] == gerencia]
-    if polo:
-        df = df[df["Pólo"] == polo]
-    if cidade:
-        df = df[df["Cidade"] == cidade]
-    if sistema:
-        df = df[df["Sistema"] == sistema]
-    if data_ini:
-        df = df[df["Data"] >= data_ini]
-    if data_fim:
-        df = df[df["Data"] <= data_fim]
+_cache = {"df": None, "ts": 0}
+
+# ── Credenciais ───────────────────────────────────────────────────────────────
+def _get_service():
+    cred_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if cred_json:
+        info = json.loads(cred_json)
+        creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+    else:
+        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+    return build("sheets", "v4", credentials=creds)
+
+# ── Funções auxiliares ────────────────────────────────────────────────────────
+def _limpar_texto(v) -> Optional[str]:
+    if v is None or str(v).strip() == "":
+        return None
+    t = str(v).replace("\xa0", " ").replace("_", " ").strip()
+    t = " ".join(t.split())
+    return t if t else None
+
+def _normalizar_chave(v) -> Optional[str]:
+    t = _limpar_texto(v)
+    if t is None:
+        return None
+    t = unicodedata.normalize("NFKD", t)
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    return t.upper().strip()
+
+def _para_numero(v, limite=None) -> Optional[float]:
+    if v is None or (isinstance(v, float) and np.isnan(v)) or str(v).strip() == "":
+        return None
+    if isinstance(v, (int, float)):
+        r = float(v)
+    else:
+        txt = str(v).strip()
+        try:
+            r = float(txt.replace(",", "."))
+        except Exception:
+            return None
+    if limite is not None and abs(r) > limite:
+        return None
+    return r
+
+def _para_datetime(v) -> Optional[pd.Timestamp]:
+    if v is None or str(v).strip() == "":
+        return None
+    if isinstance(v, pd.Timestamp):
+        return v
+    try:
+        ts = pd.to_datetime(str(v), dayfirst=True, errors="coerce")
+        if pd.isna(ts):
+            return None
+        if ts.year < 2020 or ts.year > 2030:
+            return None
+        return ts
+    except Exception:
+        return None
+
+# ── Leitura Google Sheets ─────────────────────────────────────────────────────
+def _ler_sheet(service, sheet_id: str, aba: str, colunas_filtro=None) -> pd.DataFrame:
+    result = service.spreadsheets().values().get(
+        spreadsheetId=sheet_id,
+        range=aba
+    ).execute()
+    values = result.get("values", [])
+    if not values:
+        return pd.DataFrame()
+    header = values[0]
+    rows = []
+    for row in values[1:]:
+        row_padded = row + [None] * (len(header) - len(row))
+        rows.append(row_padded[:len(header)])
+    df = pd.DataFrame(rows, columns=header)
+
+    # Filtra só colunas necessárias para economizar memória
+    if colunas_filtro:
+        cols_existentes = [c for c in colunas_filtro if c in df.columns]
+        df = df[cols_existentes]
+
     return df
 
-# ── endpoints ─────────────────────────────────────────────────────────────────
-
-@app.get("/status")
-def status():
-    info = get_cache_info()
-    return {"ok": True, "cache": info}
-
-@app.get("/filtros")
-def filtros():
-    df = carregar_dados()
-    return {
-        "gerencias": sorted(df["Gerência"].dropna().unique().tolist()),
-        "polos":     sorted(df["Pólo"].dropna().unique().tolist()),
-        "cidades":   sorted(df["Cidade"].dropna().unique().tolist()),
-        "sistemas":  sorted(df["Sistema"].dropna().unique().tolist()),
-    }
-
-@app.get("/producao")
-def producao(
-    gerencia: Optional[str] = None,
-    polo: Optional[str] = None,
-    cidade: Optional[str] = None,
-    sistema: Optional[str] = None,
-    data_ini: Optional[str] = None,
-    data_fim: Optional[str] = None,
-):
-    import pandas as pd
-    df = carregar_dados()
-    df = filtrar(df, gerencia, polo, cidade, sistema, data_ini, data_fim)
-
+# ── Particularidades ──────────────────────────────────────────────────────────
+def _carregar_particularidades(service) -> pd.DataFrame:
+    df = _ler_sheet(service, SHEET_ID_PARTICULARIDADES, ABA_PARTICULARIDADES)
     if df.empty:
-        return {"rows": []}
+        return pd.DataFrame(columns=[
+            "Cidade_Norm", "Sistema_Norm",
+            "Tipo_Regra_Calculo", "Percentual_Desconto", "Usar_Macro_Processo"
+        ])
 
-    grp = df.groupby(["Gerência", "Pólo", "Cidade", "Sistema"])
-
-    rows = []
-    for (ger, pol, cid, sis), g in grp:
-        g = g.sort_values("Data_Hora")
-
-        leit = g[g["Tem_Leitura_Macro"]]
-        if leit.empty:
-            continue
-
-        dt_ini = leit["Data_Hora"].min()
-        dt_fim = leit["Data_Hora"].max()
-        horas = (dt_fim - dt_ini).total_seconds() / 3600 if dt_ini != dt_fim else None
-
-        hor_ini = leit.loc[leit["Data_Hora"] == dt_ini, "Horimetro_Num"].max()
-        hor_fim = leit.loc[leit["Data_Hora"] == dt_fim, "Horimetro_Num"].max()
-        dif_hor = (hor_fim - hor_ini) if pd.notna(hor_ini) and pd.notna(hor_fim) and hor_fim >= hor_ini else None
-
-        prod = g["Producao"].sum() if pd.notna(g["Producao"].sum()) else 0
-        dias = horas / 24 if horas else None
-        media_dia = prod / dias if dias and dias > 0 else None
-        vazao_m3h = prod / dif_hor if dif_hor and dif_hor > 0 else None
-        vazao_ls  = vazao_m3h * 1000 / 3600 if vazao_m3h else None
-
-        rows.append({
-            "gerencia":   ger,
-            "polo":       pol,
-            "cidade":     cid,
-            "sistema":    sis,
-            "producao":   round(prod, 2),
-            "media_dia":  round(media_dia, 2) if media_dia else None,
-            "vazao_m3h":  round(vazao_m3h, 2) if vazao_m3h else None,
-            "vazao_ls":   round(vazao_ls, 4) if vazao_ls else None,
-            "horas":      round(horas, 2) if horas else None,
-        })
-
-    rows.sort(key=lambda r: r["producao"], reverse=True)
-    return {"rows": rows}
-
-@app.get("/qualidade")
-def qualidade(
-    gerencia: Optional[str] = None,
-    polo: Optional[str] = None,
-    cidade: Optional[str] = None,
-    sistema: Optional[str] = None,
-    data_ini: Optional[str] = None,
-    data_fim: Optional[str] = None,
-):
-    df = carregar_dados()
-    df = filtrar(df, gerencia, polo, cidade, sistema, data_ini, data_fim)
-    an = df[df["Tem_Analise"]]
-
-    def cnt(col, op, val):
-        if col not in an.columns:
-            return 0
-        s = an[col].dropna()
-        if op == "<=": return int((s <= val).sum())
-        if op == ">":  return int((s > val).sum())
-        return 0
-
-    return {
-        "cloro": {
-            "adequado":    cnt("Cloro (mg/L)", "<=", 5.0),
-            "inadequado":  cnt("Cloro (mg/L)", ">",  5.0),
-            "abaixo_min":  int((an["Cloro (mg/L)"].dropna() < 0.2).sum()) if "Cloro (mg/L)" in an.columns else 0,
-            "total":       int(an["Cloro (mg/L)"].dropna().count()) if "Cloro (mg/L)" in an.columns else 0,
-        },
-        "turbidez": {
-            "adequado":   cnt("Turbidez (uT)", "<=", 1.0),
-            "inadequado": cnt("Turbidez (uT)", ">",  1.0),
-            "total":      int(an["Turbidez (uT)"].dropna().count()) if "Turbidez (uT)" in an.columns else 0,
-        },
-        "cor": {
-            "adequado":   cnt("Cor (uH)", "<=", 15),
-            "inadequado": cnt("Cor (uH)", ">",  15),
-            "total":      int(an["Cor (uH)"].dropna().count()) if "Cor (uH)" in an.columns else 0,
-        },
-        "fluoreto": {
-            "adequado":   cnt("Fluoreto (mg/L)", "<=", 1.5),
-            "inadequado": cnt("Fluoreto (mg/L)", ">",  1.5),
-            "total":      int(an["Fluoreto (mg/L)"].dropna().count()) if "Fluoreto (mg/L)" in an.columns else 0,
-        },
+    rename = {
+        "Cidade_Ref_Normalizada":  "Cidade_Norm",
+        "Sistema_Ref_Normalizado": "Sistema_Norm",
     }
+    df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
 
-@app.get("/acompanhamento")
-def acompanhamento(
-    gerencia: Optional[str] = None,
-    polo: Optional[str] = None,
-    cidade: Optional[str] = None,
-    data_ini: Optional[str] = None,
-    data_fim: Optional[str] = None,
-):
-    df = carregar_dados()
-    df = filtrar(df, gerencia, polo, cidade, None, data_ini, data_fim)
+    if "Percentual_Desconto" in df.columns:
+        df["Percentual_Desconto"] = df["Percentual_Desconto"].apply(_para_numero)
+    else:
+        df["Percentual_Desconto"] = None
 
-    grp = df.groupby(["Gerência", "Pólo", "Cidade", "Sistema"])
-    rows = []
-    for (ger, pol, cid, sis), g in grp:
-        qtd_analises = int(g["Tem_Analise"].sum())
-        qtd_leituras = int(g["Tem_Leitura_Macro"].sum())
-        rows.append({
-            "gerencia":    ger,
-            "polo":        pol,
-            "cidade":      cid,
-            "sistema":     sis,
-            "analises":    qtd_analises,
-            "leituras":    qtd_leituras,
-        })
+    if "Usar_Macro_Processo_Como_Saida2" in df.columns:
+        df["Usar_Macro_Processo"] = df["Usar_Macro_Processo_Como_Saida2"].apply(
+            lambda v: str(v).strip().upper() in ("TRUE", "1", "VERDADEIRO")
+        )
+    else:
+        df["Usar_Macro_Processo"] = False
 
-    rows.sort(key=lambda r: r["analises"])
-    rank = 1
-    prev = None
-    for i, r in enumerate(rows):
-        if r["analises"] != prev:
-            rank = i + 1
-            prev = r["analises"]
-        r["rank"] = rank
+    cols = ["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo",
+            "Percentual_Desconto", "Usar_Macro_Processo"]
+    for c in cols:
+        if c not in df.columns:
+            df[c] = None
 
-    return {"rows": rows}
+    df = df[cols].dropna(subset=["Cidade_Norm", "Sistema_Norm"]).drop_duplicates(
+        subset=["Cidade_Norm", "Sistema_Norm"]
+    )
+    return df
 
-@app.get("/leituras")
-def leituras(
-    sistema: Optional[str] = None,
-    cidade: Optional[str] = None,
-    data_ini: Optional[str] = None,
-    data_fim: Optional[str] = None,
-    apenas_analise: Optional[bool] = False,
-    apenas_leitura: Optional[bool] = False,
-):
-    import math
-    df = carregar_dados()
-    df = filtrar(df, None, None, cidade, sistema, data_ini, data_fim)
+# ── Cálculo de produção por grupo ─────────────────────────────────────────────
+def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
+    g = g.sort_values("Data_Hora").reset_index(drop=True)
 
-    if apenas_analise:
-        df = df[df["Tem_Analise"]]
-    if apenas_leitura:
-        df = df[df["Tem_Leitura_Macro"]]
+    dif_me, dif_ms, dif_mp, dif_horas, dias_int = [], [], [], [], []
+    prod_base, producao, prod_media_dia = [], [], []
 
-    cols = [
-        "Data_Hora_Exibicao", "Gerência", "Pólo", "Cidade", "Sistema",
-        "ME_Num", "MS_Num", "MP_Num", "Horimetro_Num",
-        "Cloro (mg/L)", "Cor (uH)", "Fluoreto (mg/L)", "Turbidez (uT)",
-        "Producao", "Tem_Analise", "Tem_Leitura_Macro"
-    ]
-    cols = [c for c in cols if c in df.columns]
-    df = df[cols].copy()
-    df["Data_Hora_Exibicao"] = df["Data_Hora_Exibicao"].astype(str)
+    me_ant = ms_ant = mp_ant = hor_ant = dt_ant = None
+    tipo_regra_ant = "SEM_REGRA"
+    pct_ant = None
 
-    def clean(v):
-        if v is None: return None
+    for i, row in g.iterrows():
+        me  = _para_numero(row.get("ME_Num"))
+        ms  = _para_numero(row.get("MS_Num"))
+        mp  = _para_numero(row.get("MP_Num"))
+        hor = _para_numero(row.get("Horimetro_Num"), limite=10_000_000)
+        dt  = row["Data_Hora"]
+        tipo_regra = row.get("Tipo_Regra_Calculo", "SEM_REGRA") or "SEM_REGRA"
+        pct        = _para_numero(row.get("Percentual_Desconto"))
+
+        dme = (me - me_ant) if (me_ant is not None and me is not None and me >= me_ant) else None
+        dms = (ms - ms_ant) if (ms_ant is not None and ms is not None and ms >= ms_ant) else None
+        dmp = (mp - mp_ant) if (mp_ant is not None and mp is not None and mp >= mp_ant) else None
+        dhor = (hor - hor_ant) if (hor_ant is not None and hor is not None and hor >= hor_ant) else None
+
+        if dt_ant is not None and dt is not None and pd.notna(dt_ant) and pd.notna(dt):
+            delta_h = (dt - dt_ant).total_seconds() / 3600
+            dias = delta_h / 24 if delta_h > 0 else None
+        else:
+            dias = None
+
+        pb = dms if dms is not None else (dme if dme is not None else dmp)
+
+        if pb is not None:
+            pct_seguro = pct_ant
+            if pct_seguro is not None and pct_seguro > 1:
+                pct_seguro = pct_seguro / 100
+            if tipo_regra_ant == "DESCONTO_PERCENTUAL" and pct_seguro is not None:
+                pf = pb * (1 - pct_seguro)
+            elif tipo_regra_ant in ("SUBTRAIR_MACRO_PROCESSO", "SUBTRAIR_SAIDA2"):
+                pf = pb - (dmp or 0)
+            else:
+                pf = pb
+            pf = max(0, pf)
+        else:
+            pf = None
+
+        pm = pf / dias if (pf is not None and dias and dias > 0) else None
+
+        dif_me.append(dme); dif_ms.append(dms); dif_mp.append(dmp)
+        dif_horas.append(dhor); dias_int.append(dias)
+        prod_base.append(pb); producao.append(pf); prod_media_dia.append(pm)
+
+        if me is not None: me_ant = me
+        if ms is not None: ms_ant = ms
+        if mp is not None: mp_ant = mp
+        if hor is not None: hor_ant = hor
+        dt_ant = dt
+        tipo_regra_ant = tipo_regra
+        pct_ant = pct
+
+    g["Dif_Macro_Entrada"] = dif_me
+    g["Dif_Macro_Saida"]   = dif_ms
+    g["Dif_Macro_Processo"] = dif_mp
+    g["Dif_Horas"]         = dif_horas
+    g["Dias_Intervalo"]    = dias_int
+    g["Producao_Base"]     = prod_base
+    g["Producao"]          = producao
+    g["Producao_Media_Dia"] = prod_media_dia
+    return g
+
+# ── ETL principal ─────────────────────────────────────────────────────────────
+def _executar_etl() -> pd.DataFrame:
+    service = _get_service()
+
+    # 1. Leituras — só colunas necessárias
+    frames = []
+    for sid in SHEET_IDS_LEITURAS:
         try:
-            if math.isnan(float(v)): return None
-        except: pass
-        return v
+            f = _ler_sheet(service, sid, ABA_LEITURAS, colunas_filtro=COLUNAS_LEITURAS)
+            if not f.empty:
+                frames.append(f)
+        except Exception as e:
+            print(f"[ETL] Erro ao ler planilha {sid}: {e}")
+    if not frames:
+        return pd.DataFrame()
+    df = pd.concat(frames, ignore_index=True)
 
-    rows = [{k: clean(v) for k, v in r.items()} for r in df.to_dict("records")]
-    return {"rows": rows, "total": len(rows)}
+    # Libera memória imediatamente
+    del frames
+
+    # 2. Limpeza de texto
+    for col in ["Pólo", "Cidade", "Sistema", "Gerência"]:
+        if col in df.columns:
+            df[col] = df[col].apply(_limpar_texto)
+
+    # 3. Data_Hora
+    df["Data_Hora"] = df.get("Data/Hora (Leitura)", pd.Series()).apply(_para_datetime)
+    df = df[df["Data_Hora"].notna()].copy()
+    df["Data"] = df["Data_Hora"].apply(lambda x: x.date() if pd.notna(x) else None)
+
+    # Remove coluna original para economizar memória
+    df.drop(columns=["Data/Hora (Leitura)"], errors="ignore", inplace=True)
+
+    # 4. Colunas numéricas
+    df["ME_Num"]        = df.get("Macro Entrada",  pd.Series()).apply(_para_numero)
+    df["MS_Num"]        = df.get("Macro Saída ",   pd.Series(dtype=str)).apply(_para_numero)
+    if df["MS_Num"].isna().all():
+        df["MS_Num"]    = df.get("Macro Saída",    pd.Series()).apply(_para_numero)
+    df["MP_Num"]        = df.get("Macro Processo", pd.Series()).apply(_para_numero)
+    df["Horimetro_Num"] = df.get("Horímetro",      pd.Series()).apply(lambda v: _para_numero(v, 10_000_000))
+
+    # Remove colunas originais
+    df.drop(columns=["Macro Entrada", "Macro Saída ", "Macro Processo", "Horímetro"], errors="ignore", inplace=True)
+
+    # Adiciona Gerência se não existir
+    if "Gerência" not in df.columns:
+        df["Gerência"] = "OASA"
+
+    # 5. Uma leitura por dia por sistema (a de maior Data_Hora)
+    df = df.sort_values("Data_Hora")
+    df = df.groupby(["Cidade", "Sistema", "Data"], group_keys=False).apply(
+        lambda g: g.loc[[g["Data_Hora"].idxmax()]]
+    ).reset_index(drop=True)
+
+    # 6. Chave de normalização
+    df["Cidade_Norm"]  = df["Cidade"].apply(_normalizar_chave)
+    df["Sistema_Norm"] = df["Sistema"].apply(_normalizar_chave)
+
+    # 7. Particularidades
+    part = _carregar_particularidades(service)
+    df = df.merge(part, on=["Cidade_Norm", "Sistema_Norm"], how="left")
+    df["Tipo_Regra_Calculo"] = df.get("Tipo_Regra_Calculo", pd.Series()).fillna("SEM_REGRA")
+
+    # 8. Cálculo de produção
+    chave = ["Pólo", "Cidade", "Sistema"]
+    df = df.groupby(chave, group_keys=False).apply(_calcular_grupo).reset_index(drop=True)
+
+    # 9. Qualidade
+    qual_cols = ["Cloro (mg/L)", "Cor (uH)", "Fluoreto (mg/L)", "Turbidez (uT)"]
+    for col in qual_cols:
+        if col not in df.columns:
+            df[col] = None
+        df[col] = df[col].apply(_para_numero)
+
+    def _tem_analise(row):
+        return any(_para_numero(row.get(c)) is not None for c in qual_cols)
+
+    def _tem_leitura(row):
+        return any(_para_numero(row.get(c)) is not None for c in ["ME_Num", "MS_Num", "MP_Num"])
+
+    df["Tem_Analise"]       = df.apply(_tem_analise, axis=1)
+    df["Tem_Leitura_Macro"] = df.apply(_tem_leitura, axis=1)
+
+    # 10. Data_Hora_Exibicao
+    def _exibicao(dt):
+        if pd.isna(dt):
+            return dt
+        if dt.hour == 0 and dt.minute == 0 and dt.second == 0:
+            return dt.replace(hour=23, minute=59, second=0)
+        return dt
+    df["Data_Hora_Exibicao"] = df["Data_Hora"].apply(_exibicao)
+
+    return df
+
+# ── Cache público ─────────────────────────────────────────────────────────────
+def carregar_dados() -> pd.DataFrame:
+    agora = time.time()
+    if _cache["df"] is None or (agora - _cache["ts"]) > CACHE_TTL_SEGUNDOS:
+        _cache["df"] = _executar_etl()
+        _cache["ts"] = agora
+    return _cache["df"]
+
+def get_cache_info():
+    if _cache["df"] is None:
+        return {"status": "vazio"}
+    idade = int(time.time() - _cache["ts"])
+    linhas = len(_cache["df"])
+    return {"status": "ok", "linhas": linhas, "idade_segundos": idade, "ttl": CACHE_TTL_SEGUNDOS}
