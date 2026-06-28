@@ -8,7 +8,7 @@ import math
 
 import pandas as pd
 import numpy as np
-from etl import carregar_dados, get_cache_info
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
