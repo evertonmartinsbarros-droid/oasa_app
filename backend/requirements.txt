@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
-pandas
-numpy
+pandas==2.2.3
+numpy==1.26.4
 python-dotenv
 google-auth
 google-api-python-client
