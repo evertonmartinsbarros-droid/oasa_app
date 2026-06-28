@@ -89,17 +89,30 @@ def _ler_sheet(service, sheet_id: str, aba: str, colunas_filtro=None) -> pd.Data
 
 # ── Leitura de Particularidades / Regras de Cálculo ───────────────────────────
 def _carregar_particularidades(service) -> pd.DataFrame:
+    """
+    A aba 04_Chaves_Merge usa os nomes:
+      Cidade_Ref_Normalizada  →  equivalente ao Cidade_Norm do ETL
+      Sistema_Ref_Normalizado →  equivalente ao Sistema_Norm do ETL
+    Renomeamos para fazer o merge funcionar corretamente.
+    """
     try:
         df_part = _ler_sheet(service, SHEET_ID_PARTICULARIDADES, ABA_PARTICULARIDADES)
 
         if df_part.empty:
             return pd.DataFrame(columns=["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo", "Percentual_Desconto"])
 
-        if "Cidade" in df_part.columns and "Sistema" in df_part.columns:
-            df_part["Cidade_Norm"] = df_part["Cidade"].apply(_normalizar_chave).astype("category")
-            df_part["Sistema_Norm"] = df_part["Sistema"].apply(_normalizar_chave).astype("category")
-        else:
+        # Renomeia as colunas da planilha para o padrão interno do ETL
+        df_part = df_part.rename(columns={
+            "Cidade_Ref_Normalizada":  "Cidade_Norm",
+            "Sistema_Ref_Normalizado": "Sistema_Norm",
+        })
+
+        # Garante que as colunas de chave existam após o rename
+        if "Cidade_Norm" not in df_part.columns or "Sistema_Norm" not in df_part.columns:
             return pd.DataFrame(columns=["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo", "Percentual_Desconto"])
+
+        df_part["Cidade_Norm"]  = df_part["Cidade_Norm"].apply(_normalizar_chave).astype("category")
+        df_part["Sistema_Norm"] = df_part["Sistema_Norm"].apply(_normalizar_chave).astype("category")
 
         if "Percentual_Desconto" in df_part.columns:
             df_part["Percentual_Desconto"] = pd.to_numeric(
@@ -111,6 +124,9 @@ def _carregar_particularidades(service) -> pd.DataFrame:
 
         if "Tipo_Regra_Calculo" not in df_part.columns:
             df_part["Tipo_Regra_Calculo"] = "SEM_REGRA"
+
+        # Remove duplicatas de chave (mantém a primeira ocorrência)
+        df_part = df_part.drop_duplicates(subset=["Cidade_Norm", "Sistema_Norm"])
 
         return df_part[["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo", "Percentual_Desconto"]]
 
@@ -226,16 +242,17 @@ def _executar_etl() -> pd.DataFrame:
             return s.astype("float32")
         return pd.Series(dtype="float32")
 
-    df["ME_Num"]       = to_float32("Macro Entrada")
-    df["MS_Num"]       = to_float32("Macro Saída ") if "Macro Saída " in df.columns else to_float32("Macro Saída")
-    df["MP_Num"]       = to_float32("Macro Processo")
-    df["Horimetro_Num"]= to_float32("Horímetro", limit=10_000_000)
+    df["ME_Num"]        = to_float32("Macro Entrada")
+    df["MS_Num"]        = to_float32("Macro Saída ") if "Macro Saída " in df.columns else to_float32("Macro Saída")
+    df["MP_Num"]        = to_float32("Macro Processo")
+    df["Horimetro_Num"] = to_float32("Horímetro", limit=10_000_000)
 
     df.drop(columns=["Macro Entrada", "Macro Saída ", "Macro Saída", "Macro Processo", "Horímetro"], errors="ignore", inplace=True)
     gc.collect()
 
     df = df.sort_values("Data_Hora")
-    df = df.groupby(["Cidade", "Sistema", "Data"], as_index=False).last()
+    # groupby mantendo Pólo: inclui no agrupamento para não perder a coluna
+    df = df.groupby(["Pólo", "Cidade", "Sistema", "Data"], as_index=False).last()
 
     df["Cidade_Norm"]  = df["Cidade"].apply(_normalizar_chave).astype("category")
     df["Sistema_Norm"] = df["Sistema"].apply(_normalizar_chave).astype("category")
