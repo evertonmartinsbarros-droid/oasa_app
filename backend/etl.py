@@ -244,3 +244,17 @@ def _executar_etl() -> pd.DataFrame:
 
     gc.collect()
     return df
+# ── Cache público ─────────────────────────────────────────────────────────────
+def carregar_dados() -> pd.DataFrame:
+    agora = time.time()
+    if _cache["df"] is None or (agora - _cache["ts"]) > CACHE_TTL_SEGUNDOS:
+        _cache["df"] = _executar_etl()
+        _cache["ts"] = agora
+    return _cache["df"]
+
+def get_cache_info():
+    if _cache["df"] is None:
+        return {"status": "vazio"}
+    idade = int(time.time() - _cache["ts"])
+    linhas = len(_cache["df"])
+    return {"status": "ok", "linhas": linhas, "idade_segundos": idade, "ttl": CACHE_TTL_SEGUNDOS}
