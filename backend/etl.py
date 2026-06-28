@@ -242,6 +242,13 @@ def _executar_etl() -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.concat(frames, ignore_index=True)
 
+    # Filtra apenas últimos 2 meses
+    hoje = pd.Timestamp.now()
+    dois_meses_atras = hoje - pd.DateOffset(months=2)
+    df["Data_Hora_tmp"] = pd.to_datetime(df["Data/Hora (Leitura)"], dayfirst=True, errors="coerce")
+    df = df[df["Data_Hora_tmp"] >= dois_meses_atras].copy()
+    df.drop(columns=["Data_Hora_tmp"], inplace=True)
+
     # Libera memória imediatamente
     del frames
 
