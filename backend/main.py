@@ -23,7 +23,9 @@ app = FastAPI(title="OASA Dashboard API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # Substitua pelo seu domínio real no Render
+    allow_origins=["https://oasa-frontend-79mk.onrender.com", "http://localhost:3000"], 
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
