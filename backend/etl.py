@@ -188,8 +188,8 @@ def _executar_etl() -> pd.DataFrame:
     if "Gerência" not in df.columns:
         df["Gerência"] = pd.Series(["OASA"] * len(df), dtype="category")
 
-    # Data/Hora
-    df["Data_Hora"] = pd.to_datetime(df.get("Data/Hora (Leitura)", pd.Series()), dayfirst=True, errors="coerce")
+    # Data/Hora (CORREÇÃO: adicionado dtype="object" para evitar FutureWarning)
+    df["Data_Hora"] = pd.to_datetime(df.get("Data/Hora (Leitura)", pd.Series(dtype="object")), dayfirst=True, errors="coerce")
     df = df.dropna(subset=["Data_Hora"]).copy()
     df["Data"] = df["Data_Hora"].dt.date
     df.drop(columns=["Data/Hora (Leitura)"], errors="ignore", inplace=True)
@@ -205,7 +205,9 @@ def _executar_etl() -> pd.DataFrame:
     df["ME_Num"] = to_float32("Macro Entrada")
     df["MS_Num"] = to_float32("Macro Saída ") if not df.get("Macro Saída ").isna().all() else to_float32("Macro Saída")
     df["MP_Num"] = to_float32("Macro Processo")
-    df["Horimetro_Num"] = to_float32("Horímetro", limite=10_000_000)
+    
+    # CORREÇÃO: limite ajustado para limit
+    df["Horimetro_Num"] = to_float32("Horímetro", limit=10_000_000)
 
     # Limpando lixo residual
     df.drop(columns=["Macro Entrada", "Macro Saída ", "Macro Saída", "Macro Processo", "Horímetro"], errors="ignore", inplace=True)
@@ -244,6 +246,7 @@ def _executar_etl() -> pd.DataFrame:
 
     gc.collect()
     return df
+
 # ── Cache público ─────────────────────────────────────────────────────────────
 def carregar_dados() -> pd.DataFrame:
     agora = time.time()
