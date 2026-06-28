@@ -53,7 +53,7 @@ def status():
 
 @app.get("/filtros")
 def filtros():
-    df = carregar_dados()
+      df = get_df_seguro() 
     return {
         "gerencias": sorted(df["Gerência"].dropna().unique().tolist()),
         "polos":     sorted(df["Pólo"].dropna().unique().tolist()),
