@@ -1,10 +1,22 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from typing import Optional
+import asyncio
 import os
 from etl import carregar_dados, get_cache_info
 
-app = FastAPI(title="OASA Dashboard API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Carrega dados em background ao iniciar o servidor
+    asyncio.create_task(carregar_em_background())
+    yield
+
+async def carregar_em_background():
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, carregar_dados)
+
+app = FastAPI(title="OASA Dashboard API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,7 +82,6 @@ def producao(
     for (ger, pol, cid, sis), g in grp:
         g = g.sort_values("Data_Hora")
 
-        # extremos só de linhas com leitura
         leit = g[g["Tem_Leitura_Macro"]]
         if leit.empty:
             continue
@@ -174,7 +185,6 @@ def acompanhamento(
             "leituras":    qtd_leituras,
         })
 
-    # rank por menor número de análises (0 análises = rank 1)
     rows.sort(key=lambda r: r["analises"])
     rank = 1
     prev = None
