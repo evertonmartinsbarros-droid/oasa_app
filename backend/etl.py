@@ -13,7 +13,6 @@ from googleapiclient.discovery import build
 
 load_dotenv()
 
-# ── Configuração ──────────────────────────────────────────────────────────────
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -29,28 +28,15 @@ ABA_LEITURAS              = os.getenv("ABA_LEITURAS", "Registos")
 ABA_PARTICULARIDADES      = os.getenv("ABA_PARTICULARIDADES", "04_Chaves_Merge")
 CACHE_TTL_SEGUNDOS        = int(os.getenv("CACHE_TTL", "300"))
 
-# Mapeamento de nomes alternativos que o Sheets pode retornar
-# chave = nome canônico interno, valores = variações aceitas
-ALIAS_COLUNAS = {
-    "Pólo":            ["Pólo", "Polo", "polo", "POLO", "Pólo "],
-    "Cidade":          ["Cidade", "cidade", "municipio", "Município", "Municipio", "CIDADE"],
-    "Sistema":         ["Sistema", "sistema", "SISTEMA"],
-    "Gerência":        ["Gerência", "Gerencia", "gerencia", "GERÊNCIA", "GERENCIA"],
-    "Data/Hora (Leitura)": ["Data/Hora (Leitura)", "Data/Hora(Leitura)", "Data Hora Leitura"],
-    "Macro Entrada":   ["Macro Entrada", "MacroEntrada", "macro_entrada"],
-    "Macro Saída ":    ["Macro Saída ", "Macro Saída", "MacroSaida", "macro_saida"],
-    "Macro Processo":  ["Macro Processo", "MacroProcesso", "macro_processo"],
-    "Horímetro":       ["Horímetro", "Horimetro", "horimetro", "HORÍMETRO"],
-    "Turbidez (uT)":   ["Turbidez (uT)", "Turbidez(uT)", "turbidez"],
-    "Cor (uH)":        ["Cor (uH)", "Cor(uH)", "cor"],
-    "Cloro (mg/L)":    ["Cloro (mg/L)", "Cloro(mg/L)", "cloro"],
-    "Fluoreto (mg/L)": ["Fluoreto (mg/L)", "Fluoreto(mg/L)", "fluoreto"],
-}
+COLUNAS_LEITURAS = [
+    "Data/Hora (Leitura)", "Gerência", "Pólo", "Cidade", "Sistema",
+    "Macro Entrada", "Macro Saída ", "Macro Processo", "Horímetro",
+    "Turbidez (uT)", "Cor (uH)", "Cloro (mg/L)", "Fluoreto (mg/L)",
+]
 
 _cache = {"df": None, "ts": 0}
 
 
-# ── Credenciais ───────────────────────────────────────────────────────────────
 def _get_service():
     cred_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
     if cred_json:
@@ -61,7 +47,6 @@ def _get_service():
     return build("sheets", "v4", credentials=creds)
 
 
-# ── Funções auxiliares ────────────────────────────────────────────────────────
 def _limpar_texto(v) -> Optional[str]:
     if pd.isna(v) or str(v).strip() == "": return None
     t = " ".join(str(v).replace("\xa0", " ").replace("_", " ").split())
@@ -85,21 +70,6 @@ def _para_numero(v, limit=None) -> Optional[float]:
         return None
 
 
-def _normalizar_colunas(df: pd.DataFrame) -> pd.DataFrame:
-    """Renomeia colunas do DataFrame para os nomes canônicos usando ALIAS_COLUNAS."""
-    rename_map = {}
-    for nome_canonico, aliases in ALIAS_COLUNAS.items():
-        for alias in aliases:
-            if alias in df.columns and alias != nome_canonico:
-                rename_map[alias] = nome_canonico
-                break
-    if rename_map:
-        print(f"[ETL] Renomeando colunas: {rename_map}")
-        df = df.rename(columns=rename_map)
-    return df
-
-
-# ── Leitura Google Sheets ─────────────────────────────────────────────────────
 def _ler_sheet(service, sheet_id: str, aba: str, colunas_filtro=None) -> pd.DataFrame:
     result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=aba).execute()
     values = result.get("values", [])
@@ -112,9 +82,6 @@ def _ler_sheet(service, sheet_id: str, aba: str, colunas_filtro=None) -> pd.Data
     del result
     gc.collect()
 
-    # Normaliza nomes de colunas antes de filtrar
-    df = _normalizar_colunas(df)
-
     if colunas_filtro:
         cols_existentes = [c for c in colunas_filtro if c in df.columns]
         df = df[cols_existentes]
@@ -122,7 +89,6 @@ def _ler_sheet(service, sheet_id: str, aba: str, colunas_filtro=None) -> pd.Data
     return df
 
 
-# ── Leitura de Particularidades / Regras de Cálculo ───────────────────────────
 def _carregar_particularidades(service) -> pd.DataFrame:
     try:
         df_part = _ler_sheet(service, SHEET_ID_PARTICULARIDADES, ABA_PARTICULARIDADES)
@@ -130,7 +96,6 @@ def _carregar_particularidades(service) -> pd.DataFrame:
         if df_part.empty:
             return pd.DataFrame(columns=["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo", "Percentual_Desconto"])
 
-        # A aba 04_Chaves_Merge usa Cidade_Ref_Normalizada / Sistema_Ref_Normalizado
         df_part = df_part.rename(columns={
             "Cidade_Ref_Normalizada":  "Cidade_Norm",
             "Sistema_Ref_Normalizado": "Sistema_Norm",
@@ -162,7 +127,6 @@ def _carregar_particularidades(service) -> pd.DataFrame:
         return pd.DataFrame(columns=["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo", "Percentual_Desconto"])
 
 
-# ── Cálculo de produção por grupo ─────────────────────────────────────────────
 def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
     g = g.sort_values("Data_Hora").reset_index(drop=True)
 
@@ -198,7 +162,6 @@ def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
         if pb is not None:
             pct_seguro = pct_ant
             if pct_seguro is not None and pct_seguro > 1: pct_seguro /= 100
-
             if tipo_regra_ant == "DESCONTO_PERCENTUAL" and pct_seguro is not None:
                 pf = pb * (1 - pct_seguro)
             elif tipo_regra_ant in ("SUBTRAIR_MACRO_PROCESSO", "SUBTRAIR_SAIDA2"):
@@ -230,16 +193,9 @@ def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
     return g
 
 
-# ── ETL principal ─────────────────────────────────────────────────────────────
 def _executar_etl() -> pd.DataFrame:
     service = _get_service()
     frames = []
-
-    COLUNAS_LEITURAS = [
-        "Data/Hora (Leitura)", "Gerência", "Pólo", "Cidade", "Sistema",
-        "Macro Entrada", "Macro Saída ", "Macro Processo", "Horímetro",
-        "Turbidez (uT)", "Cor (uH)", "Cloro (mg/L)", "Fluoreto (mg/L)",
-    ]
 
     for sid in SHEET_IDS_LEITURAS:
         try:
@@ -260,8 +216,6 @@ def _executar_etl() -> pd.DataFrame:
     for col in col_str:
         if col in df.columns:
             df[col] = df[col].apply(_limpar_texto).astype("category")
-        else:
-            print(f"[ETL] AVISO: coluna '{col}' não encontrada após concat. Colunas presentes: {list(df.columns)}")
 
     if "Gerência" not in df.columns:
         df["Gerência"] = pd.Series(["OASA"] * len(df), dtype="category")
@@ -290,8 +244,17 @@ def _executar_etl() -> pd.DataFrame:
     gc.collect()
 
     df = df.sort_values("Data_Hora")
-    # Inclui Pólo no groupby para não perder a coluna
-    df = df.groupby(["Pólo", "Cidade", "Sistema", "Data"], as_index=False).last()
+
+    # ── CORREÇÃO: salva mapeamento Cidade+Sistema → Pólo+Gerência ANTES do groupby
+    # O Pandas 3.x remove colunas de categoria do resultado quando usadas como chave
+    mapa_polo = df.groupby(["Cidade", "Sistema"], observed=True)[["Pólo", "Gerência"]].first().reset_index()
+
+    # Filtra uma leitura por dia (mantém a última)
+    df = df.groupby(["Cidade", "Sistema", "Data"], as_index=False).last()
+
+    # Restaura Pólo e Gerência via merge
+    df = df.drop(columns=["Pólo", "Gerência"], errors="ignore")
+    df = df.merge(mapa_polo, on=["Cidade", "Sistema"], how="left")
 
     df["Cidade_Norm"]  = df["Cidade"].apply(_normalizar_chave).astype("category")
     df["Sistema_Norm"] = df["Sistema"].apply(_normalizar_chave).astype("category")
@@ -320,12 +283,11 @@ def _executar_etl() -> pd.DataFrame:
         df.loc[mask_midnight, "Data_Hora"] + pd.Timedelta(hours=23, minutes=59)
     )
 
-    print(f"[ETL] Concluído. Shape final: {df.shape}. Colunas: {list(df.columns)}")
+    print(f"[ETL] Concluído. Shape: {df.shape}. Colunas: {list(df.columns)}")
     gc.collect()
     return df
 
 
-# ── Cache público ─────────────────────────────────────────────────────────────
 def carregar_dados() -> pd.DataFrame:
     agora = time.time()
     if _cache["df"] is None or (agora - _cache["ts"]) > CACHE_TTL_SEGUNDOS:
