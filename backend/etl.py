@@ -47,7 +47,7 @@ def _get_service():
         creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
     return build("sheets", "v4", credentials=creds)
 
-# ── Funções auxiliares (Mantidas, mas aplicadas com mais eficiência) ──────────
+# ── Funções auxiliares ────────────────────────────────────────────────────────
 def _limpar_texto(v) -> Optional[str]:
     if pd.isna(v) or str(v).strip() == "": return None
     t = " ".join(str(v).replace("\xa0", " ").replace("_", " ").split())
@@ -59,11 +59,11 @@ def _normalizar_chave(v) -> Optional[str]:
     t = unicodedata.normalize("NFKD", t)
     return "".join(c for c in t if not unicodedata.combining(c)).upper().strip()
 
-def _para_numero(v, limite=None) -> Optional[float]:
+def _para_numero(v, limit=None) -> Optional[float]:
     if pd.isna(v) or str(v).strip() == "": return None
     try:
         r = float(str(v).strip().replace(",", "."))
-        if limite is not None and abs(r) > limite: return None
+        if limit is not None and abs(r) > limit: return None
         return r
     except:
         return None
@@ -90,6 +90,37 @@ def _ler_sheet(service, sheet_id: str, aba: str, colunas_filtro=None) -> pd.Data
 
     return df
 
+# ── Leitura de Particularidades / Regras de Cálculo ───────────────────────────
+def _carregar_particularidades(service) -> pd.DataFrame:
+    try:
+        df_part = _ler_sheet(service, SHEET_ID_PARTICULARIDADES, ABA_PARTICULARIDADES)
+        
+        if df_part.empty:
+            return pd.DataFrame(columns=["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo", "Percentual_Desconto"])
+
+        if "Cidade" in df_part.columns and "Sistema" in df_part.columns:
+            df_part["Cidade_Norm"] = df_part["Cidade"].apply(_normalizar_chave).astype("category")
+            df_part["Sistema_Norm"] = df_part["Sistema"].apply(_normalizar_chave).astype("category")
+        else:
+            return pd.DataFrame(columns=["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo", "Percentual_Desconto"])
+
+        if "Percentual_Desconto" in df_part.columns:
+            df_part["Percentual_Desconto"] = pd.to_numeric(
+                df_part["Percentual_Desconto"].astype(str).str.replace("%", "").str.replace(",", "."), 
+                errors="coerce"
+            )
+        else:
+            df_part["Percentual_Desconto"] = None
+
+        if "Tipo_Regra_Calculo" not in df_part.columns:
+            df_part["Tipo_Regra_Calculo"] = "SEM_REGRA"
+
+        return df_part[["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo", "Percentual_Desconto"]]
+        
+    except Exception as e:
+        print(f"[ETL] Erro ao carregar particularidades: {e}")
+        return pd.DataFrame(columns=["Cidade_Norm", "Sistema_Norm", "Tipo_Regra_Calculo", "Percentual_Desconto"])
+
 # ── Cálculo de produção por grupo (OTIMIZADO) ─────────────────────────────────
 def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
     g = g.sort_values("Data_Hora").reset_index(drop=True)
@@ -101,7 +132,7 @@ def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
     tipo_regra_ant = "SEM_REGRA"
     pct_ant = None
 
-    # OTIMIZAÇÃO: itertuples() é ~50x mais rápido e gasta quase 0 memória comparado a iterrows()
+    # OTIMIZAÇÃO: itertuples() é ~50x mais rápido e gasta quase 0 memória
     for row in g.itertuples():
         me = row.ME_Num if pd.notna(row.ME_Num) else None
         ms = row.MS_Num if pd.notna(row.MS_Num) else None
@@ -182,19 +213,19 @@ def _executar_etl() -> pd.DataFrame:
     col_str = ["Pólo", "Cidade", "Sistema", "Gerência"]
     for col in col_str:
         if col in df.columns:
-            df[col] = df[col].apply(_limpar_texto).astype("category") # Transforma texto em categoria
+            df[col] = df[col].apply(_limpar_texto).astype("category")
 
     # Adiciona Gerência se não existir
     if "Gerência" not in df.columns:
         df["Gerência"] = pd.Series(["OASA"] * len(df), dtype="category")
 
-    # Data/Hora (CORREÇÃO: adicionado dtype="object" para evitar FutureWarning)
+    # Data/Hora (dtype="object" adicionado para evitar avisos)
     df["Data_Hora"] = pd.to_datetime(df.get("Data/Hora (Leitura)", pd.Series(dtype="object")), dayfirst=True, errors="coerce")
     df = df.dropna(subset=["Data_Hora"]).copy()
     df["Data"] = df["Data_Hora"].dt.date
     df.drop(columns=["Data/Hora (Leitura)"], errors="ignore", inplace=True)
 
-    # Convertendo números massivamente e fazendo Downcast para float32 (Metade da RAM gasta)
+    # Convertendo números massivamente e fazendo Downcast para float32
     def to_float32(col_name, limit=None):
         if col_name in df.columns:
             s = pd.to_numeric(df[col_name].astype(str).str.replace(",", "."), errors="coerce")
@@ -205,8 +236,6 @@ def _executar_etl() -> pd.DataFrame:
     df["ME_Num"] = to_float32("Macro Entrada")
     df["MS_Num"] = to_float32("Macro Saída ") if not df.get("Macro Saída ").isna().all() else to_float32("Macro Saída")
     df["MP_Num"] = to_float32("Macro Processo")
-    
-    # CORREÇÃO: limite ajustado para limit
     df["Horimetro_Num"] = to_float32("Horímetro", limit=10_000_000)
 
     # Limpando lixo residual
@@ -222,7 +251,6 @@ def _executar_etl() -> pd.DataFrame:
     df["Sistema_Norm"] = df["Sistema"].apply(_normalizar_chave).astype("category")
 
     # Particularidades (Mesclagem)
-    # Supondo que _carregar_particularidades existe e já foi otimizado se necessário
     part = _carregar_particularidades(service) 
     df = df.merge(part, on=["Cidade_Norm", "Sistema_Norm"], how="left")
     df["Tipo_Regra_Calculo"] = df["Tipo_Regra_Calculo"].fillna("SEM_REGRA").astype("category")
