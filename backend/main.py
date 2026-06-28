@@ -10,50 +10,70 @@ import pandas as pd
 import numpy as np
 from etl import carregar_dados, get_cache_info
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.create_task(carregar_em_background())
     yield
 
+
 async def carregar_em_background():
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, carregar_dados)
+
 
 app = FastAPI(title="OASA Dashboard API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    # Substitua pelo seu domínio real no Render
-    allow_origins=["https://oasa-frontend-79mk.onrender.com", "http://localhost:3000"], 
+    allow_origins=["https://oasa-frontend-79mk.onrender.com", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# OTIMIZAÇÃO 1: Filtro com Máscara Booleana (Cria apenas 1 cópia na RAM)
+
+# --- BLINDAGEM DA API ---
+def get_df_seguro():
+    df = carregar_dados()
+    if df.empty:
+        return df
+    if "Gerência" not in df.columns:
+        df["Gerência"] = "OASA"
+    if "Pólo" not in df.columns:
+        df["Pólo"] = df["Polo"] if "Polo" in df.columns else "Não Informado"
+    if "Cidade" not in df.columns:
+        df["Cidade"] = "Não Informada"
+    if "Sistema" not in df.columns:
+        df["Sistema"] = "Não Informado"
+    return df
+
+
+# Filtro com Máscara Booleana
 def filtrar(df, gerencia=None, polo=None, cidade=None, sistema=None, data_ini=None, data_fim=None):
     mask = pd.Series(True, index=df.index)
-    
+
     if gerencia: mask &= (df["Gerência"] == gerencia)
     if polo:     mask &= (df["Pólo"] == polo)
     if cidade:   mask &= (df["Cidade"] == cidade)
     if sistema:  mask &= (df["Sistema"] == sistema)
-    
+
     if data_ini or data_fim:
-        # Garante que a comparação seja feita com strings ou converte
         data_str = df["Data"].astype(str)
         if data_ini: mask &= (data_str >= data_ini)
         if data_fim: mask &= (data_str <= data_fim)
-        
+
     return df[mask]
+
 
 @app.get("/status")
 def status():
     return {"ok": True, "cache": get_cache_info()}
 
+
 @app.get("/filtros")
 def filtros():
-      df = get_df_seguro() 
+    df = get_df_seguro()
     return {
         "gerencias": sorted(df["Gerência"].dropna().unique().tolist()),
         "polos":     sorted(df["Pólo"].dropna().unique().tolist()),
@@ -61,24 +81,27 @@ def filtros():
         "sistemas":  sorted(df["Sistema"].dropna().unique().tolist()),
     }
 
+
 @app.get("/producao")
 def producao(
     gerencia: Optional[str] = None, polo: Optional[str] = None,
     cidade: Optional[str] = None, sistema: Optional[str] = None,
     data_ini: Optional[str] = None, data_fim: Optional[str] = None,
 ):
-    df = carregar_dados()
+    df = get_df_seguro()
     df = filtrar(df, gerencia, polo, cidade, sistema, data_ini, data_fim)
 
-    if df.empty: return {"rows": []}
+    if df.empty:
+        return {"rows": []}
 
     grp = df.groupby(["Gerência", "Pólo", "Cidade", "Sistema"], observed=True)
     rows = []
-    
+
     for (ger, pol, cid, sis), g in grp:
         g = g.sort_values("Data_Hora")
         leit = g[g["Tem_Leitura_Macro"]]
-        if leit.empty: continue
+        if leit.empty:
+            continue
 
         dt_ini, dt_fim = leit["Data_Hora"].min(), leit["Data_Hora"].max()
         horas = (dt_fim - dt_ini).total_seconds() / 3600 if dt_ini != dt_fim else None
@@ -88,8 +111,9 @@ def producao(
         dif_hor = (hor_fim - hor_ini) if pd.notna(hor_ini) and pd.notna(hor_fim) and hor_fim >= hor_ini else None
 
         prod = g["Producao"].sum()
-        if pd.isna(prod): prod = 0
-        
+        if pd.isna(prod):
+            prod = 0
+
         dias = horas / 24 if horas else None
         media_dia = prod / dias if dias and dias > 0 else None
         vazao_m3h = prod / dif_hor if dif_hor and dif_hor > 0 else None
@@ -97,15 +121,16 @@ def producao(
 
         rows.append({
             "gerencia": ger, "polo": pol, "cidade": cid, "sistema": sis,
-            "producao": round(prod, 2),
+            "producao":  round(prod, 2),
             "media_dia": round(media_dia, 2) if media_dia else None,
             "vazao_m3h": round(vazao_m3h, 2) if vazao_m3h else None,
-            "vazao_ls":  round(vazao_ls, 4) if vazao_ls else None,
-            "horas":     round(horas, 2) if horas else None,
+            "vazao_ls":  round(vazao_ls, 4)  if vazao_ls  else None,
+            "horas":     round(horas, 2)     if horas     else None,
         })
 
     rows.sort(key=lambda r: r["producao"], reverse=True)
     return {"rows": rows}
+
 
 @app.get("/qualidade")
 def qualidade(
@@ -113,12 +138,13 @@ def qualidade(
     cidade: Optional[str] = None, sistema: Optional[str] = None,
     data_ini: Optional[str] = None, data_fim: Optional[str] = None,
 ):
-    df = carregar_dados()
+    df = get_df_seguro()
     df = filtrar(df, gerencia, polo, cidade, sistema, data_ini, data_fim)
     an = df[df["Tem_Analise"]]
 
     def cnt(col, op, val):
-        if col not in an.columns: return 0
+        if col not in an.columns:
+            return 0
         s = an[col].dropna()
         if op == "<=": return int((s <= val).sum())
         if op == ">":  return int((s > val).sum())
@@ -148,17 +174,18 @@ def qualidade(
         },
     }
 
+
 @app.get("/acompanhamento")
 def acompanhamento(
     gerencia: Optional[str] = None, polo: Optional[str] = None,
     cidade: Optional[str] = None, data_ini: Optional[str] = None, data_fim: Optional[str] = None,
 ):
-    df = carregar_dados()
+    df = get_df_seguro()
     df = filtrar(df, gerencia, polo, cidade, None, data_ini, data_fim)
 
     grp = df.groupby(["Gerência", "Pólo", "Cidade", "Sistema"], observed=True)
     rows = []
-    
+
     for (ger, pol, cid, sis), g in grp:
         rows.append({
             "gerencia": ger, "polo": pol, "cidade": cid, "sistema": sis,
@@ -167,7 +194,7 @@ def acompanhamento(
         })
 
     rows.sort(key=lambda r: r["analises"])
-    
+
     rank = 1
     prev = None
     for i, r in enumerate(rows):
@@ -178,13 +205,14 @@ def acompanhamento(
 
     return {"rows": rows}
 
+
 @app.get("/leituras")
 def leituras(
     sistema: Optional[str] = None, cidade: Optional[str] = None,
     data_ini: Optional[str] = None, data_fim: Optional[str] = None,
     apenas_analise: Optional[bool] = False, apenas_leitura: Optional[bool] = False,
 ):
-    df = carregar_dados()
+    df = get_df_seguro()
     df = filtrar(df, None, None, cidade, sistema, data_ini, data_fim)
 
     if apenas_analise: df = df[df["Tem_Analise"]]
@@ -198,8 +226,7 @@ def leituras(
     ]
     cols = [c for c in cols if c in df.columns]
     df = df[cols].copy()
-    
-    # OTIMIZAÇÃO 2: Converte NaNs para None direto no Pandas (muito mais rápido que for-loop)
+
     df = df.replace({np.nan: None})
     df["Data_Hora_Exibicao"] = df["Data_Hora_Exibicao"].astype(str).replace({"NaT": None, "nan": None})
 
