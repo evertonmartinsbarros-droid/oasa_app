@@ -263,8 +263,23 @@ def _executar_etl() -> pd.DataFrame:
     df = df.merge(part, on=["Cidade_Norm", "Sistema_Norm"], how="left")
     df["Tipo_Regra_Calculo"] = df["Tipo_Regra_Calculo"].fillna("SEM_REGRA").astype("category")
 
-    chave = ["Pólo", "Cidade", "Sistema"]
-    df = df.groupby(chave, group_keys=False, observed=True).apply(_calcular_grupo).reset_index(drop=True)
+    # ── CORREÇÃO (Pandas >=2.2 / 3.0): groupby(...).apply() exclui por padrão as
+    # colunas usadas como chave do dataframe entregue à função (em pandas 3.0,
+    # include_groups=True foi removido — a exclusão é sempre obrigatória).
+    # Por isso "Pólo", "Cidade" e "Sistema" desapareciam do resultado final.
+    # Solução: agrupar por uma chave sintética (string concatenada) que não é
+    # nenhuma das colunas reais, assim elas seguem como colunas normais e não
+    # são excluídas pelo apply(). Evitar tupla de categóricos como chave —
+    # use string simples (mais estável entre versões do pandas).
+    df["_grupo_chave"] = (
+        df["Pólo"].astype(str) + "|" + df["Cidade"].astype(str) + "|" + df["Sistema"].astype(str)
+    )
+    df = (
+        df.groupby("_grupo_chave", group_keys=False, observed=True)
+          .apply(_calcular_grupo, include_groups=False)
+          .reset_index(drop=True)
+    )
+    df = df.drop(columns=["_grupo_chave"], errors="ignore")
 
     qual_cols = ["Cloro (mg/L)", "Cor (uH)", "Fluoreto (mg/L)", "Turbidez (uT)"]
     for col in qual_cols:
