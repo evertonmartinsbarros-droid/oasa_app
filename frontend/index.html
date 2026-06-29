@@ -6,450 +6,402 @@
 <title>OASA — Dashboard Operacional</title>
 
 <style>
-  :root {
-    --bg: #0f172a;
-    --surface: #1e293b;
-    --surface2: #273549;
-    --border: #334155;
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --blue: #3b82f6;
-    --green: #22c55e;
-    --yellow: #f59e0b;
-    --red: #ef4444;
-    --teal: #14b8a6;
-    --purple: #8b5cf6;
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#273549;--border:#334155;
+  --text:#e2e8f0;--muted:#94a3b8;--blue:#3b82f6;--green:#22c55e;
+  --yellow:#f59e0b;--red:#ef4444;--teal:#14b8a6;--purple:#8b5cf6;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Segoe UI',sans-serif;
+  font-size:14px;
+}
+
+header{
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:14px 24px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+header h1{font-size:18px;font-weight:700}
+header span{font-size:12px;color:var(--muted);margin-left:auto}
+
+#status-dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--muted);
+}
+
+#status-dot.ok{background:var(--green)}
+
+.container{
+  max-width:1500px;
+  margin:0 auto;
+  padding:20px 24px;
+}
+
+.filtros{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:16px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  align-items:flex-end;
+  margin-bottom:20px;
+}
+
+.filtros label{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:11px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+
+.filtros select,
+.filtros input{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:6px;
+  padding:7px 10px;
+  font-size:13px;
+  min-width:140px;
+}
+
+.filtros select:focus,
+.filtros input:focus{
+  outline:none;
+  border-color:var(--blue);
+}
+
+.btn{
+  background:var(--blue);
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  padding:8px 18px;
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+}
+
+.btn:hover{opacity:.85}
+
+.btn-outline{
+  background:transparent;
+  border:1px solid var(--border);
+  color:var(--muted);
+}
+
+.btn-outline:hover{
+  border-color:var(--blue);
+  color:var(--blue);
+}
+
+.btn-pdf{
+  background:var(--red);
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  padding:8px 14px;
+  font-size:12px;
+  font-weight:600;
+  cursor:pointer;
+  white-space:nowrap;
+}
+
+.btn-excel{
+  background:var(--green);
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  padding:8px 14px;
+  font-size:12px;
+  font-weight:600;
+  cursor:pointer;
+  white-space:nowrap;
+}
+
+.btn-pdf:hover,
+.btn-excel:hover{
+  opacity:.85;
+}
+
+.tabs{
+  display:flex;
+  gap:4px;
+  margin-bottom:20px;
+  border-bottom:1px solid var(--border);
+}
+
+.tab{
+  padding:9px 18px;
+  cursor:pointer;
+  border-radius:6px 6px 0 0;
+  font-size:13px;
+  font-weight:500;
+  color:var(--muted);
+  border:1px solid transparent;
+  border-bottom:none;
+}
+
+.tab.active{
+  background:var(--surface);
+  border-color:var(--border);
+  color:var(--text);
+}
+
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+.cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+  gap:14px;
+  margin-bottom:20px;
+}
+
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:16px;
+}
+
+.card .label{
+  font-size:11px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  margin-bottom:8px;
+}
+
+.card .value{
+  font-size:24px;
+  font-weight:700;
+}
+
+.card .sub{
+  font-size:11px;
+  color:var(--muted);
+  margin-top:4px;
+}
+
+.c-blue{border-top:3px solid var(--blue)}
+.c-green{border-top:3px solid var(--green)}
+.c-yellow{border-top:3px solid var(--yellow)}
+.c-teal{border-top:3px solid var(--teal)}
+.c-purple{border-top:3px solid var(--purple)}
+.c-red{border-top:3px solid var(--red)}
+
+.table-wrap{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:auto;
+}
+
+.table-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:12px 16px;
+  gap:12px;
+}
+
+.table-actions{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+
+.table-count{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.search-bar{
+  padding:8px 10px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:6px;
+  color:var(--text);
+  font-size:13px;
+  width:220px;
+}
+
+.search-bar:focus{
+  outline:none;
+  border-color:var(--blue);
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th{
+  background:var(--surface2);
+  padding:10px 12px;
+  text-align:left;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color:var(--muted);
+  border-bottom:1px solid var(--border);
+  cursor:pointer;
+  white-space:nowrap;
+}
+
+th:hover{color:var(--text)}
+
+td{
+  padding:9px 12px;
+  border-bottom:1px solid var(--border);
+  font-size:13px;
+  white-space:nowrap;
+}
+
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface2)}
+
+.badge{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:600;
+}
+
+.badge-green{background:#16a34a22;color:var(--green)}
+.badge-red{background:#dc262622;color:var(--red)}
+.badge-yellow{background:#d9770622;color:var(--yellow)}
+.badge-blue{background:#2563eb22;color:var(--blue)}
+
+.rank-1{color:var(--red);font-weight:700}
+.rank-2{color:var(--yellow)}
+.rank-ok{color:var(--green)}
+
+.qual-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:14px;
+}
+
+.qual-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:18px;
+}
+
+.qual-card h3{
+  font-size:13px;
+  font-weight:600;
+  margin-bottom:12px;
+}
+
+.qual-bar{
+  height:8px;
+  border-radius:4px;
+  background:var(--border);
+  overflow:hidden;
+  margin:6px 0;
+}
+
+.qual-bar-fill{
+  height:100%;
+  border-radius:4px;
+  transition:width .4s;
+}
+
+.qual-row{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  font-size:12px;
+  color:var(--muted);
+  flex-wrap:wrap;
+}
+
+.loading{
+  text-align:center;
+  padding:60px;
+  color:var(--muted);
+}
+
+.spinner{
+  display:inline-block;
+  width:24px;
+  height:24px;
+  border:3px solid var(--border);
+  border-top-color:var(--blue);
+  border-radius:50%;
+  animation:spin .8s linear infinite;
+  margin-right:8px;
+}
+
+@keyframes spin{
+  to{transform:rotate(360deg)}
+}
+
+@media(max-width:768px){
+  header{
+    padding:12px 14px;
+    flex-wrap:wrap;
   }
 
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+  header span{
+    margin-left:0;
+    width:100%;
   }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Segoe UI', sans-serif;
-    font-size: 14px;
+  .container{
+    padding:14px;
   }
 
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 14px 24px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  header h1 {
-    font-size: 18px;
-    font-weight: 700;
-  }
-
-  header span {
-    font-size: 12px;
-    color: var(--muted);
-    margin-left: auto;
-  }
-
-  #status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-  }
-
-  #status-dot.ok {
-    background: var(--green);
-  }
-
-  .container {
-    max-width: 1500px;
-    margin: 0 auto;
-    padding: 20px 24px;
-  }
-
-  .filtros {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: flex-end;
-    margin-bottom: 20px;
-  }
-
-  .filtros label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 11px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: .05em;
-  }
-
+  .filtros label,
   .filtros select,
-  .filtros input {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 6px;
-    padding: 7px 10px;
-    font-size: 13px;
-    min-width: 140px;
+  .filtros input,
+  .btn{
+    width:100%;
+    min-width:100%;
   }
 
-  .filtros select:focus,
-  .filtros input:focus {
-    outline: none;
-    border-color: var(--blue);
+  .tabs{
+    overflow-x:auto;
   }
 
-  .btn {
-    background: var(--blue);
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 18px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
+  .tab{
+    white-space:nowrap;
   }
 
-  .btn:hover {
-    opacity: .85;
+  .table-header,
+  .table-actions{
+    flex-direction:column;
+    align-items:stretch;
+    width:100%;
   }
 
-  .btn-outline {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
+  .search-bar,
+  .btn-pdf,
+  .btn-excel{
+    width:100%;
   }
-
-  .btn-outline:hover {
-    border-color: var(--blue);
-    color: var(--blue);
-  }
-
-  .tabs {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 20px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .tab {
-    padding: 9px 18px;
-    cursor: pointer;
-    border-radius: 6px 6px 0 0;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--muted);
-    border: 1px solid transparent;
-    border-bottom: none;
-  }
-
-  .tab.active {
-    background: var(--surface);
-    border-color: var(--border);
-    color: var(--text);
-  }
-
-  .tab-content {
-    display: none;
-  }
-
-  .tab-content.active {
-    display: block;
-  }
-
-  .cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 14px;
-    margin-bottom: 20px;
-  }
-
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-  }
-
-  .card .label {
-    font-size: 11px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    margin-bottom: 8px;
-  }
-
-  .card .value {
-    font-size: 24px;
-    font-weight: 700;
-  }
-
-  .card .sub {
-    font-size: 11px;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-
-  .c-blue {
-    border-top: 3px solid var(--blue);
-  }
-
-  .c-green {
-    border-top: 3px solid var(--green);
-  }
-
-  .c-yellow {
-    border-top: 3px solid var(--yellow);
-  }
-
-  .c-teal {
-    border-top: 3px solid var(--teal);
-  }
-
-  .c-purple {
-    border-top: 3px solid var(--purple);
-  }
-
-  .c-red {
-    border-top: 3px solid var(--red);
-  }
-
-  .table-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    overflow: auto;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  th {
-    background: var(--surface2);
-    padding: 10px 12px;
-    text-align: left;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  th:hover {
-    color: var(--text);
-  }
-
-  td {
-    padding: 9px 12px;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-    white-space: nowrap;
-  }
-
-  tr:last-child td {
-    border-bottom: none;
-  }
-
-  tr:hover td {
-    background: var(--surface2);
-  }
-
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-  }
-
-  .badge-green {
-    background: #16a34a22;
-    color: var(--green);
-  }
-
-  .badge-red {
-    background: #dc262622;
-    color: var(--red);
-  }
-
-  .badge-yellow {
-    background: #d9770622;
-    color: var(--yellow);
-  }
-
-  .badge-blue {
-    background: #2563eb22;
-    color: var(--blue);
-  }
-
-  .rank-1 {
-    color: var(--red);
-    font-weight: 700;
-  }
-
-  .rank-2 {
-    color: var(--yellow);
-  }
-
-  .rank-ok {
-    color: var(--green);
-  }
-
-  .qual-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 14px;
-  }
-
-  .qual-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px;
-  }
-
-  .qual-card h3 {
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 12px;
-  }
-
-  .qual-bar {
-    height: 8px;
-    border-radius: 4px;
-    background: var(--border);
-    overflow: hidden;
-    margin: 6px 0;
-  }
-
-  .qual-bar-fill {
-    height: 100%;
-    border-radius: 4px;
-    transition: width .4s;
-  }
-
-  .qual-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--muted);
-    flex-wrap: wrap;
-  }
-
-  .loading {
-    text-align: center;
-    padding: 60px;
-    color: var(--muted);
-  }
-
-  .spinner {
-    display: inline-block;
-    width: 24px;
-    height: 24px;
-    border: 3px solid var(--border);
-    border-top-color: var(--blue);
-    border-radius: 50%;
-    animation: spin .8s linear infinite;
-    margin-right: 8px;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  .search-bar {
-    padding: 8px 10px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    font-size: 13px;
-    width: 220px;
-  }
-
-  .search-bar:focus {
-    outline: none;
-    border-color: var(--blue);
-  }
-
-  .table-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    gap: 12px;
-  }
-
-  .table-count {
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  @media (max-width: 768px) {
-    header {
-      padding: 12px 14px;
-      flex-wrap: wrap;
-    }
-
-    header span {
-      margin-left: 0;
-      width: 100%;
-    }
-
-    .container {
-      padding: 14px;
-    }
-
-    .filtros {
-      gap: 10px;
-    }
-
-    .filtros label,
-    .filtros select,
-    .filtros input {
-      width: 100%;
-      min-width: 100%;
-    }
-
-    .btn {
-      width: 100%;
-    }
-
-    .tabs {
-      overflow-x: auto;
-    }
-
-    .tab {
-      white-space: nowrap;
-    }
-
-    .table-header {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .search-bar {
-      width: 100%;
-    }
-  }
+}
 </style>
 </head>
 
@@ -501,10 +453,10 @@
   </div>
 
   <div class="tabs">
-    <div class="tab active" onclick="mudarAba('producao', this)">Produção</div>
-    <div class="tab" onclick="mudarAba('acompanhamento', this)">Acompanhamento</div>
-    <div class="tab" onclick="mudarAba('qualidade', this)">Qualidade</div>
-    <div class="tab" onclick="mudarAba('leituras', this)">Leituras</div>
+    <div class="tab active" onclick="mudarAba('producao',this)">Produção</div>
+    <div class="tab" onclick="mudarAba('acompanhamento',this)">Acompanhamento</div>
+    <div class="tab" onclick="mudarAba('qualidade',this)">Qualidade</div>
+    <div class="tab" onclick="mudarAba('leituras',this)">Leituras</div>
   </div>
 
   <div id="aba-producao" class="tab-content active">
@@ -515,21 +467,26 @@
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-count" id="count-producao"></span>
-        <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-producao', this.value)">
+
+        <div class="table-actions">
+          <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-producao',this.value)">
+          <button class="btn-excel" onclick="exportarProducaoExcel()">Exportar Excel</button>
+          <button class="btn-pdf" onclick="exportarProducaoPDF()">Exportar PDF</button>
+        </div>
       </div>
 
       <table id="tbl-producao">
         <thead>
           <tr>
-            <th onclick="sortTable('tbl-producao', 0)">Gerência</th>
-            <th onclick="sortTable('tbl-producao', 1)">Pólo</th>
-            <th onclick="sortTable('tbl-producao', 2)">Cidade</th>
-            <th onclick="sortTable('tbl-producao', 3)">Sistema</th>
-            <th onclick="sortTable('tbl-producao', 4)">Produção Mês</th>
-            <th onclick="sortTable('tbl-producao', 5)">Horas Totais Mês</th>
-            <th onclick="sortTable('tbl-producao', 6)">Média Diária m³</th>
-            <th onclick="sortTable('tbl-producao', 7)">Vazão Média L/s</th>
-            <th onclick="sortTable('tbl-producao', 8)">H/D</th>
+            <th onclick="sortTable('tbl-producao',0)">Gerência</th>
+            <th onclick="sortTable('tbl-producao',1)">Pólo</th>
+            <th onclick="sortTable('tbl-producao',2)">Cidade</th>
+            <th onclick="sortTable('tbl-producao',3)">Sistema</th>
+            <th onclick="sortTable('tbl-producao',4)">Produção Mês</th>
+            <th onclick="sortTable('tbl-producao',5)">Horas Totais Mês</th>
+            <th onclick="sortTable('tbl-producao',6)">Média Diária m³</th>
+            <th onclick="sortTable('tbl-producao',7)">Vazão Média L/s</th>
+            <th onclick="sortTable('tbl-producao',8)">H/D</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -541,19 +498,19 @@
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-count" id="count-acomp"></span>
-        <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-acomp', this.value)">
+        <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-acomp',this.value)">
       </div>
 
       <table id="tbl-acomp">
         <thead>
           <tr>
-            <th onclick="sortTable('tbl-acomp', 0)">Rank</th>
-            <th onclick="sortTable('tbl-acomp', 1)">Gerência</th>
-            <th onclick="sortTable('tbl-acomp', 2)">Pólo</th>
-            <th onclick="sortTable('tbl-acomp', 3)">Cidade</th>
-            <th onclick="sortTable('tbl-acomp', 4)">Sistema</th>
-            <th onclick="sortTable('tbl-acomp', 5)">Análises</th>
-            <th onclick="sortTable('tbl-acomp', 6)">Leituras Macro</th>
+            <th onclick="sortTable('tbl-acomp',0)">Rank</th>
+            <th onclick="sortTable('tbl-acomp',1)">Gerência</th>
+            <th onclick="sortTable('tbl-acomp',2)">Pólo</th>
+            <th onclick="sortTable('tbl-acomp',3)">Cidade</th>
+            <th onclick="sortTable('tbl-acomp',4)">Sistema</th>
+            <th onclick="sortTable('tbl-acomp',5)">Análises</th>
+            <th onclick="sortTable('tbl-acomp',6)">Leituras Macro</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -584,7 +541,7 @@
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-count" id="count-leit"></span>
-        <input class="search-bar" placeholder="Buscar…" oninput="filtrarTabela('tbl-leit', this.value)">
+        <input class="search-bar" placeholder="Buscar…" oninput="filtrarTabela('tbl-leit',this.value)">
       </div>
 
       <table id="tbl-leit">
@@ -615,9 +572,7 @@
 
 <script>
 const API = window.OASA_API_BASE || (
-  window.location.hostname === "localhost"
-    ? "http://localhost:8000"
-    : ""
+  window.location.hostname === "localhost" ? "http://localhost:8000" : ""
 );
 
 let abaAtiva = "producao";
@@ -627,30 +582,28 @@ let combinacoesFiltros = [];
 // INICIALIZAÇÃO
 // ======================================================
 
-async function init() {
+async function init(){
   await carregarFiltros();
   await carregarStatus();
   await carregarProducao();
 }
 
-async function carregarStatus() {
-  try {
+async function carregarStatus(){
+  try{
     const r = await fetch(`${API}/status`);
     const d = await r.json();
 
     document.getElementById("status-dot").className = "ok";
-
     document.getElementById("header-info").textContent =
       `${d.cache?.linhas?.toLocaleString("pt-BR") ?? "?"} registros · atualizado há ${d.cache?.idade_segundos ?? "?"}s`;
-
-  } catch (e) {
-    console.error("Erro ao carregar status:", e);
+  }catch(e){
+    console.error("Erro status:",e);
     document.getElementById("header-info").textContent = "Erro ao conectar";
   }
 }
 
-async function carregarFiltros() {
-  try {
+async function carregarFiltros(){
+  try{
     const r = await fetch(`${API}/filtros`);
     const d = await r.json();
 
@@ -660,19 +613,18 @@ async function carregarFiltros() {
     preencherSelect("f-polo", d.polos || []);
     preencherSelect("f-cidade", d.cidades || []);
     preencherSelect("f-sistema", d.sistemas || []);
-
-  } catch (e) {
-    console.error("Erro ao carregar filtros:", e);
+  }catch(e){
+    console.error("Erro filtros:",e);
   }
 }
 
-function preencherSelect(id, lista) {
+function preencherSelect(id, lista){
   const el = document.getElementById(id);
   const primeiro = el.options[0].outerHTML;
 
   const listaTratada = [...new Set(lista)]
     .filter(v => v !== null && v !== undefined && String(v).trim() !== "")
-    .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
+    .sort((a,b) => String(a).localeCompare(String(b),"pt-BR"));
 
   el.innerHTML = primeiro + listaTratada
     .map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`)
@@ -680,27 +632,27 @@ function preencherSelect(id, lista) {
 }
 
 // ======================================================
-// CASCATA DOS FILTROS
+// CASCATA
 // ======================================================
 
-function atualizarCascata(nivel) {
+function atualizarCascata(nivel){
   const ger = document.getElementById("f-gerencia").value;
   const pol = document.getElementById("f-polo").value;
   const cid = document.getElementById("f-cidade").value;
 
   let filtrado = combinacoesFiltros;
 
-  if (ger) filtrado = filtrado.filter(x => String(x["Gerência"]) === String(ger));
-  if (pol) filtrado = filtrado.filter(x => String(x["Pólo"]) === String(pol));
-  if (cid) filtrado = filtrado.filter(x => String(x["Cidade"]) === String(cid));
+  if(ger) filtrado = filtrado.filter(x => String(x["Gerência"]) === String(ger));
+  if(pol) filtrado = filtrado.filter(x => String(x["Pólo"]) === String(pol));
+  if(cid) filtrado = filtrado.filter(x => String(x["Cidade"]) === String(cid));
 
   const unicos = col => [...new Set(
     filtrado
       .map(x => x[col])
       .filter(v => v !== null && v !== undefined && String(v).trim() !== "")
-  )].sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
+  )].sort((a,b) => String(a).localeCompare(String(b),"pt-BR"));
 
-  if (nivel === "gerencia") {
+  if(nivel === "gerencia"){
     document.getElementById("f-polo").value = "";
     document.getElementById("f-cidade").value = "";
     document.getElementById("f-sistema").value = "";
@@ -710,7 +662,7 @@ function atualizarCascata(nivel) {
     preencherSelect("f-sistema", unicos("Sistema"));
   }
 
-  if (nivel === "polo") {
+  if(nivel === "polo"){
     document.getElementById("f-cidade").value = "";
     document.getElementById("f-sistema").value = "";
 
@@ -718,65 +670,56 @@ function atualizarCascata(nivel) {
     preencherSelect("f-sistema", unicos("Sistema"));
   }
 
-  if (nivel === "cidade") {
+  if(nivel === "cidade"){
     document.getElementById("f-sistema").value = "";
-
     preencherSelect("f-sistema", unicos("Sistema"));
   }
 }
 
 // ======================================================
-// PARÂMETROS E ABAS
+// FILTROS / ABAS
 // ======================================================
 
-function params() {
+function params(){
   const p = new URLSearchParams();
 
-  const add = (k, id) => {
-    const el = document.getElementById(id);
-    const v = el ? el.value : "";
-    if (v) p.append(k, v);
+  const add = (k,id) => {
+    const v = document.getElementById(id)?.value;
+    if(v) p.append(k,v);
   };
 
-  add("gerencia", "f-gerencia");
-  add("polo", "f-polo");
-  add("cidade", "f-cidade");
-  add("sistema", "f-sistema");
-  add("data_ini", "f-data-ini");
-  add("data_fim", "f-data-fim");
+  add("gerencia","f-gerencia");
+  add("polo","f-polo");
+  add("cidade","f-cidade");
+  add("sistema","f-sistema");
+  add("data_ini","f-data-ini");
+  add("data_fim","f-data-fim");
 
   return p.toString() ? "?" + p.toString() : "";
 }
 
-function aplicarFiltros() {
-  if (abaAtiva === "producao") carregarProducao();
-  if (abaAtiva === "acompanhamento") carregarAcompanhamento();
-  if (abaAtiva === "qualidade") carregarQualidade();
-  if (abaAtiva === "leituras") carregarLeituras();
+function aplicarFiltros(){
+  if(abaAtiva === "producao") carregarProducao();
+  if(abaAtiva === "acompanhamento") carregarAcompanhamento();
+  if(abaAtiva === "qualidade") carregarQualidade();
+  if(abaAtiva === "leituras") carregarLeituras();
 }
 
-function limparFiltros() {
-  [
-    "f-gerencia",
-    "f-polo",
-    "f-cidade",
-    "f-sistema",
-    "f-data-ini",
-    "f-data-fim"
-  ].forEach(id => {
+function limparFiltros(){
+  ["f-gerencia","f-polo","f-cidade","f-sistema","f-data-ini","f-data-fim"].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.value = "";
+    if(el) el.value = "";
   });
 
-  preencherSelect("f-gerencia", [...new Set(combinacoesFiltros.map(x => x["Gerência"]).filter(Boolean))]);
-  preencherSelect("f-polo", [...new Set(combinacoesFiltros.map(x => x["Pólo"]).filter(Boolean))]);
-  preencherSelect("f-cidade", [...new Set(combinacoesFiltros.map(x => x["Cidade"]).filter(Boolean))]);
-  preencherSelect("f-sistema", [...new Set(combinacoesFiltros.map(x => x["Sistema"]).filter(Boolean))]);
+  preencherSelect("f-gerencia",[...new Set(combinacoesFiltros.map(x => x["Gerência"]).filter(Boolean))]);
+  preencherSelect("f-polo",[...new Set(combinacoesFiltros.map(x => x["Pólo"]).filter(Boolean))]);
+  preencherSelect("f-cidade",[...new Set(combinacoesFiltros.map(x => x["Cidade"]).filter(Boolean))]);
+  preencherSelect("f-sistema",[...new Set(combinacoesFiltros.map(x => x["Sistema"]).filter(Boolean))]);
 
   aplicarFiltros();
 }
 
-function mudarAba(nome, el) {
+function mudarAba(nome,el){
   abaAtiva = nome;
 
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -785,32 +728,31 @@ function mudarAba(nome, el) {
   el.classList.add("active");
   document.getElementById("aba-" + nome).classList.add("active");
 
-  if (nome === "producao") carregarProducao();
-  if (nome === "acompanhamento") carregarAcompanhamento();
-  if (nome === "qualidade") carregarQualidade();
-  if (nome === "leituras") carregarLeituras();
+  if(nome === "producao") carregarProducao();
+  if(nome === "acompanhamento") carregarAcompanhamento();
+  if(nome === "qualidade") carregarQualidade();
+  if(nome === "leituras") carregarLeituras();
 }
 
 // ======================================================
 // PRODUÇÃO
 // ======================================================
 
-async function carregarProducao() {
+async function carregarProducao(){
   const cards = document.getElementById("cards-producao");
   const tbody = document.querySelector("#tbl-producao tbody");
 
   cards.innerHTML = `<div class="loading"><span class="spinner"></span>Carregando produção…</div>`;
   tbody.innerHTML = "";
 
-  try {
+  try{
     const r = await fetch(`${API}/producao${params()}`);
     const d = await r.json();
 
     let rows = d.rows || [];
-
     rows = calcularCamposProducao(rows);
 
-    const totais = rows.reduce((a, r) => {
+    const totais = rows.reduce((a,r) => {
       a.producaoMes += num(r.producao_mes);
       a.mediaDia += num(r.media_dia);
       a.vazaoM3h += num(r.vazao_m3h);
@@ -818,13 +760,13 @@ async function carregarProducao() {
       a.horasDia += num(r.horas_dia);
       a.horasMes += num(r.horas_mes);
       return a;
-    }, {
-      producaoMes: 0,
-      mediaDia: 0,
-      vazaoM3h: 0,
-      vazaoLs: 0,
-      horasDia: 0,
-      horasMes: 0
+    },{
+      producaoMes:0,
+      mediaDia:0,
+      vazaoM3h:0,
+      vazaoLs:0,
+      horasDia:0,
+      horasMes:0
     });
 
     cards.innerHTML = `
@@ -865,8 +807,7 @@ async function carregarProducao() {
       </div>
     `;
 
-    document.getElementById("count-producao").textContent =
-      `${rows.length} sistemas`;
+    document.getElementById("count-producao").textContent = `${rows.length} sistemas`;
 
     tbody.innerHTML = rows.map(r => `
       <tr>
@@ -882,8 +823,8 @@ async function carregarProducao() {
       </tr>
     `).join("");
 
-  } catch (e) {
-    console.error("Erro ao carregar produção:", e);
+  }catch(e){
+    console.error("Erro produção:",e);
 
     cards.innerHTML = `
       <div class="card c-red">
@@ -897,7 +838,7 @@ async function carregarProducao() {
   }
 }
 
-function calcularCamposProducao(rows) {
+function calcularCamposProducao(rows){
   const diasMes = diasNoMesReferencia();
 
   return rows.map(r => {
@@ -907,7 +848,7 @@ function calcularCamposProducao(rows) {
 
     let vazaoLs = numNull(r.vazao_ls);
 
-    if (vazaoLs == null && vazaoM3h != null && vazaoM3h > 0) {
+    if(vazaoLs == null && vazaoM3h != null && vazaoM3h > 0){
       vazaoLs = vazaoM3h * 1000 / 3600;
     }
 
@@ -917,54 +858,23 @@ function calcularCamposProducao(rows) {
 
     let diasIntervalo = null;
 
-    if (
-      producao != null &&
-      mediaDia != null &&
-      mediaDia > 0
-    ) {
+    if(producao != null && mediaDia != null && mediaDia > 0){
       diasIntervalo = producao / mediaDia;
     }
 
-    /*
-      REGRA CORRETA DO H/D:
-
-      Não usar r.horas, porque r.horas é tempo corrido entre a primeira e a última leitura.
-
-      A média de horas por dia deve considerar o horímetro:
-      1. Usa r.horimetro_horas se o backend devolver a diferença do horímetro.
-      2. Se não devolver, calcula pelas mesmas bases:
-         horas_horimetro = produção / vazão_m3h
-      3. Se não tiver vazão_m3h, calcula por:
-         horas_horimetro = produção / (vazão_l/s * 3.6)
-    */
-
     let horasHorimetro = numNull(r.horimetro_horas);
 
-    if (
-      horasHorimetro == null &&
-      producao != null &&
-      vazaoM3h != null &&
-      vazaoM3h > 0
-    ) {
+    if(horasHorimetro == null && producao != null && vazaoM3h != null && vazaoM3h > 0){
       horasHorimetro = producao / vazaoM3h;
     }
 
-    if (
-      horasHorimetro == null &&
-      producao != null &&
-      vazaoLs != null &&
-      vazaoLs > 0
-    ) {
+    if(horasHorimetro == null && producao != null && vazaoLs != null && vazaoLs > 0){
       horasHorimetro = producao / (vazaoLs * 3.6);
     }
 
     let horasDia = null;
 
-    if (
-      horasHorimetro != null &&
-      diasIntervalo != null &&
-      diasIntervalo > 0
-    ) {
+    if(horasHorimetro != null && diasIntervalo != null && diasIntervalo > 0){
       horasDia = horasHorimetro / diasIntervalo;
     }
 
@@ -981,20 +891,17 @@ function calcularCamposProducao(rows) {
   });
 }
 
-function diasNoMesReferencia() {
+function diasNoMesReferencia(){
   const dataFim = document.getElementById("f-data-fim").value;
   const dataIni = document.getElementById("f-data-ini").value;
-
   const base = dataFim || dataIni;
 
   let data;
 
-  if (base) {
+  if(base){
     const partes = base.split("-");
-    const ano = Number(partes[0]);
-    const mes = Number(partes[1]);
-    data = new Date(ano, mes - 1, 1);
-  } else {
+    data = new Date(Number(partes[0]), Number(partes[1]) - 1, 1);
+  }else{
     data = new Date();
   }
 
@@ -1002,35 +909,326 @@ function diasNoMesReferencia() {
 }
 
 // ======================================================
+// EXPORTAR EXCEL — PRODUÇÃO
+// ======================================================
+
+function exportarProducaoExcel(){
+  const tabela = document.getElementById("tbl-producao");
+
+  const cabecalhos = Array.from(tabela.querySelectorAll("thead th"))
+    .map(th => th.textContent.trim());
+
+  const linhas = Array.from(tabela.querySelectorAll("tbody tr"));
+
+  if(linhas.length === 0){
+    alert("Não há dados para exportar.");
+    return;
+  }
+
+  const filtros = {
+    gerencia: document.getElementById("f-gerencia")?.value || "Todas",
+    polo: document.getElementById("f-polo")?.value || "Todos",
+    cidade: document.getElementById("f-cidade")?.value || "Todas",
+    sistema: document.getElementById("f-sistema")?.value || "Todos",
+    dataIni: document.getElementById("f-data-ini")?.value || "Não informada",
+    dataFim: document.getElementById("f-data-fim")?.value || "Não informada"
+  };
+
+  const hoje = new Date().toLocaleString("pt-BR");
+
+  const cabecalhoTabela = cabecalhos
+    .map(c => `<th>${escapeHtml(c)}</th>`)
+    .join("");
+
+  const linhasTabela = linhas.map(tr => {
+    const celulas = Array.from(tr.querySelectorAll("td"))
+      .map(td => `<td style="mso-number-format:'\\@';">${escapeHtml(td.textContent.trim())}</td>`)
+      .join("");
+
+    return `<tr>${celulas}</tr>`;
+  }).join("");
+
+  const htmlExcel = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="UTF-8">
+
+<!--[if gte mso 9]>
+<xml>
+  <x:ExcelWorkbook>
+    <x:ExcelWorksheets>
+      <x:ExcelWorksheet>
+        <x:Name>Produção</x:Name>
+        <x:WorksheetOptions>
+          <x:DisplayGridlines/>
+        </x:WorksheetOptions>
+      </x:ExcelWorksheet>
+    </x:ExcelWorksheets>
+  </x:ExcelWorkbook>
+</xml>
+<![endif]-->
+
+<style>
+table{
+  border-collapse:collapse;
+  width:100%;
+}
+
+th{
+  background:#1e293b;
+  color:#ffffff;
+  font-weight:bold;
+  border:1px solid #334155;
+  padding:8px;
+  text-align:left;
+}
+
+td{
+  border:1px solid #cbd5e1;
+  padding:6px;
+  mso-number-format:"\\@";
+}
+
+.titulo{
+  font-size:18px;
+  font-weight:bold;
+  color:#0f172a;
+}
+
+.subtitulo{
+  color:#475569;
+}
+
+.filtro{
+  background:#f1f5f9;
+  font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+<table>
+  <tr>
+    <td colspan="${cabecalhos.length}" class="titulo">Relatório de Produção — OASA</td>
+  </tr>
+
+  <tr>
+    <td colspan="${cabecalhos.length}" class="subtitulo">Gerado em ${escapeHtml(hoje)}</td>
+  </tr>
+
+  <tr><td colspan="${cabecalhos.length}"></td></tr>
+
+  <tr>
+    <td class="filtro">Gerência</td>
+    <td>${escapeHtml(filtros.gerencia)}</td>
+    <td class="filtro">Pólo</td>
+    <td>${escapeHtml(filtros.polo)}</td>
+    <td class="filtro">Cidade</td>
+    <td>${escapeHtml(filtros.cidade)}</td>
+  </tr>
+
+  <tr>
+    <td class="filtro">Sistema</td>
+    <td>${escapeHtml(filtros.sistema)}</td>
+    <td class="filtro">Data inicial</td>
+    <td>${escapeHtml(filtros.dataIni)}</td>
+    <td class="filtro">Data final</td>
+    <td>${escapeHtml(filtros.dataFim)}</td>
+  </tr>
+
+  <tr><td colspan="${cabecalhos.length}"></td></tr>
+
+  <tr>
+    ${cabecalhoTabela}
+  </tr>
+
+  ${linhasTabela}
+</table>
+</body>
+</html>
+  `;
+
+  const blob = new Blob(["\ufeff" + htmlExcel], {
+    type:"application/vnd.ms-excel;charset=utf-8;"
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const dataArquivo = new Date().toISOString().slice(0,10);
+  const nomeArquivo = `producao_oasa_${dataArquivo}.xls`;
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = nomeArquivo;
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+}
+
+// ======================================================
+// EXPORTAR PDF — PRODUÇÃO
+// ======================================================
+
+function exportarProducaoPDF(){
+  const tabela = document.getElementById("tbl-producao");
+
+  const linhasVisiveis = Array.from(tabela.querySelectorAll("tbody tr"))
+    .filter(tr => tr.style.display !== "none");
+
+  if(linhasVisiveis.length === 0){
+    alert("Não há linhas visíveis para exportar.");
+    return;
+  }
+
+  const filtros = {
+    gerencia: document.getElementById("f-gerencia")?.value || "Todas",
+    polo: document.getElementById("f-polo")?.value || "Todos",
+    cidade: document.getElementById("f-cidade")?.value || "Todas",
+    sistema: document.getElementById("f-sistema")?.value || "Todos",
+    dataIni: document.getElementById("f-data-ini")?.value || "Não informada",
+    dataFim: document.getElementById("f-data-fim")?.value || "Não informada"
+  };
+
+  const hoje = new Date().toLocaleString("pt-BR");
+
+  const cards = Array.from(document.querySelectorAll("#cards-producao .card")).map(card => {
+    const label = card.querySelector(".label")?.textContent || "";
+    const value = card.querySelector(".value")?.textContent || "";
+    const sub = card.querySelector(".sub")?.textContent || "";
+
+    return `
+      <div class="pdf-card">
+        <div class="pdf-card-label">${escapeHtml(label)}</div>
+        <div class="pdf-card-value">${escapeHtml(value)}</div>
+        <div class="pdf-card-sub">${escapeHtml(sub)}</div>
+      </div>
+    `;
+  }).join("");
+
+  const cabecalho = Array.from(tabela.querySelectorAll("thead th"))
+    .map(th => `<th>${escapeHtml(th.textContent.trim())}</th>`)
+    .join("");
+
+  const corpo = linhasVisiveis.map(tr => {
+    const tds = Array.from(tr.querySelectorAll("td"))
+      .map(td => `<td>${escapeHtml(td.textContent.trim())}</td>`)
+      .join("");
+
+    return `<tr>${tds}</tr>`;
+  }).join("");
+
+  const htmlPDF = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Relatório Produção OASA</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;color:#111827;margin:24px;font-size:12px}
+.pdf-header{border-bottom:2px solid #1e293b;padding-bottom:12px;margin-bottom:16px}
+.pdf-title{font-size:20px;font-weight:700;margin-bottom:4px;color:#0f172a}
+.pdf-subtitle{font-size:11px;color:#475569}
+.pdf-filtros{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin:14px 0 18px 0;font-size:11px;background:#f1f5f9;border:1px solid #cbd5e1;padding:10px;border-radius:6px}
+.pdf-filtros strong{color:#0f172a}
+.pdf-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+.pdf-card{border:1px solid #cbd5e1;border-radius:6px;padding:10px;background:#f8fafc}
+.pdf-card-label{font-size:10px;text-transform:uppercase;color:#475569;margin-bottom:5px}
+.pdf-card-value{font-size:18px;font-weight:700;color:#0f172a}
+.pdf-card-sub{font-size:10px;color:#64748b;margin-top:3px}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th{background:#1e293b;color:#fff;padding:7px;border:1px solid #334155;font-size:10px;text-align:left;text-transform:uppercase}
+td{padding:6px;border:1px solid #cbd5e1;font-size:10px}
+tr:nth-child(even) td{background:#f8fafc}
+.pdf-footer{margin-top:18px;font-size:10px;color:#64748b;border-top:1px solid #cbd5e1;padding-top:8px}
+@page{size:A4 landscape;margin:12mm}
+@media print{body{margin:0}}
+</style>
+</head>
+<body>
+
+<div class="pdf-header">
+  <div class="pdf-title">Relatório de Produção — OASA</div>
+  <div class="pdf-subtitle">Gerado em ${escapeHtml(hoje)}</div>
+</div>
+
+<div class="pdf-filtros">
+  <div><strong>Gerência:</strong> ${escapeHtml(filtros.gerencia)}</div>
+  <div><strong>Pólo:</strong> ${escapeHtml(filtros.polo)}</div>
+  <div><strong>Cidade:</strong> ${escapeHtml(filtros.cidade)}</div>
+  <div><strong>Sistema:</strong> ${escapeHtml(filtros.sistema)}</div>
+  <div><strong>Data inicial:</strong> ${escapeHtml(filtros.dataIni)}</div>
+  <div><strong>Data final:</strong> ${escapeHtml(filtros.dataFim)}</div>
+</div>
+
+<div class="pdf-cards">
+  ${cards}
+</div>
+
+<table>
+  <thead>
+    <tr>${cabecalho}</tr>
+  </thead>
+  <tbody>
+    ${corpo}
+  </tbody>
+</table>
+
+<div class="pdf-footer">
+  Total exportado: ${linhasVisiveis.length} sistema(s). Valores conforme filtros aplicados no dashboard.
+</div>
+
+<script>
+window.onload = function(){
+  setTimeout(function(){
+    window.print();
+  },300);
+};
+<\/script>
+
+</body>
+</html>
+  `;
+
+  const janela = window.open("", "_blank");
+
+  if(!janela){
+    alert("O navegador bloqueou a janela de exportação. Libere pop-ups para este site.");
+    return;
+  }
+
+  janela.document.open();
+  janela.document.write(htmlPDF);
+  janela.document.close();
+}
+
+// ======================================================
 // ACOMPANHAMENTO
 // ======================================================
 
-async function carregarAcompanhamento() {
-  try {
+async function carregarAcompanhamento(){
+  try{
     const r = await fetch(`${API}/acompanhamento${params()}`);
     const d = await r.json();
-
     const rows = d.rows || [];
 
-    document.getElementById("count-acomp").textContent =
-      `${rows.length} sistemas`;
+    document.getElementById("count-acomp").textContent = `${rows.length} sistemas`;
 
     const tbody = document.querySelector("#tbl-acomp tbody");
 
     tbody.innerHTML = rows.map(row => {
-      const rankClass =
-        row.rank === 1
-          ? "rank-1"
-          : row.rank <= 5
-          ? "rank-2"
-          : "rank-ok";
+      const rankClass = row.rank === 1 ? "rank-1" : row.rank <= 5 ? "rank-2" : "rank-ok";
 
-      const status =
-        row.analises === 0
-          ? `<span class="badge badge-red">Sem análise</span>`
-          : row.analises < 3
-          ? `<span class="badge badge-yellow">Poucas análises</span>`
-          : `<span class="badge badge-green">Regular</span>`;
+      const status = row.analises === 0
+        ? `<span class="badge badge-red">Sem análise</span>`
+        : row.analises < 3
+        ? `<span class="badge badge-yellow">Poucas análises</span>`
+        : `<span class="badge badge-green">Regular</span>`;
 
       return `
         <tr>
@@ -1046,8 +1244,8 @@ async function carregarAcompanhamento() {
       `;
     }).join("");
 
-  } catch (e) {
-    console.error("Erro ao carregar acompanhamento:", e);
+  }catch(e){
+    console.error("Erro acompanhamento:",e);
   }
 }
 
@@ -1055,40 +1253,16 @@ async function carregarAcompanhamento() {
 // QUALIDADE
 // ======================================================
 
-async function carregarQualidade() {
-  try {
+async function carregarQualidade(){
+  try{
     const r = await fetch(`${API}/qualidade${params()}`);
     const d = await r.json();
 
     const params_q = [
-      {
-        key: "cloro",
-        label: "Cloro Residual Livre",
-        unidade: "mg/L",
-        limite: "≤ 5,0",
-        cor: "#3b82f6"
-      },
-      {
-        key: "turbidez",
-        label: "Turbidez",
-        unidade: "uT",
-        limite: "≤ 1,0",
-        cor: "#8b5cf6"
-      },
-      {
-        key: "cor",
-        label: "Cor Aparente",
-        unidade: "uH",
-        limite: "≤ 15",
-        cor: "#f59e0b"
-      },
-      {
-        key: "fluoreto",
-        label: "Fluoreto",
-        unidade: "mg/L",
-        limite: "≤ 1,5",
-        cor: "#14b8a6"
-      }
+      {key:"cloro",label:"Cloro Residual Livre",unidade:"mg/L",limite:"≤ 5,0",cor:"#3b82f6"},
+      {key:"turbidez",label:"Turbidez",unidade:"uT",limite:"≤ 1,0",cor:"#8b5cf6"},
+      {key:"cor",label:"Cor Aparente",unidade:"uH",limite:"≤ 15",cor:"#f59e0b"},
+      {key:"fluoreto",label:"Fluoreto",unidade:"mg/L",limite:"≤ 1,5",cor:"#14b8a6"}
     ];
 
     document.getElementById("qual-grid").innerHTML = params_q.map(p => {
@@ -1100,40 +1274,21 @@ async function carregarQualidade() {
 
       return `
         <div class="qual-card">
-          <h3>
-            ${p.label}
-            <span style="color:var(--muted);font-weight:400;font-size:11px">
-              (${p.limite} ${p.unidade})
-            </span>
-          </h3>
-
-          <div style="font-size:28px;font-weight:700;color:${pct >= 80 ? "var(--green)" : pct >= 60 ? "var(--yellow)" : "var(--red)"}">
-            ${pct}%
-          </div>
-
-          <div class="qual-bar">
-            <div class="qual-bar-fill" style="width:${pct}%;background:${p.cor}"></div>
-          </div>
-
+          <h3>${p.label} <span style="color:var(--muted);font-weight:400;font-size:11px">(${p.limite} ${p.unidade})</span></h3>
+          <div style="font-size:28px;font-weight:700;color:${pct >= 80 ? "var(--green)" : pct >= 60 ? "var(--yellow)" : "var(--red)"}">${pct}%</div>
+          <div class="qual-bar"><div class="qual-bar-fill" style="width:${pct}%;background:${p.cor}"></div></div>
           <div class="qual-row">
             <span>Adequado: ${adeq}</span>
             <span>Inadequado: ${inad}</span>
             <span>Total: ${total}</span>
           </div>
-
-          ${
-            p.key === "cloro" && q.abaixo_min
-              ? `<div style="font-size:11px;color:var(--red);margin-top:6px">
-                   ⚠ ${q.abaixo_min} abaixo do mínimo (&lt; 0,2 mg/L)
-                 </div>`
-              : ""
-          }
+          ${p.key === "cloro" && q.abaixo_min ? `<div style="font-size:11px;color:var(--red);margin-top:6px">⚠ ${q.abaixo_min} abaixo do mínimo (&lt; 0,2 mg/L)</div>` : ""}
         </div>
       `;
     }).join("");
 
-  } catch (e) {
-    console.error("Erro ao carregar qualidade:", e);
+  }catch(e){
+    console.error("Erro qualidade:",e);
   }
 }
 
@@ -1141,46 +1296,38 @@ async function carregarQualidade() {
 // LEITURAS
 // ======================================================
 
-async function carregarLeituras() {
-  try {
+async function carregarLeituras(){
+  try{
     const p = new URLSearchParams();
 
-    const add = (k, id) => {
+    const add = (k,id) => {
       const v = document.getElementById(id)?.value;
-      if (v) p.append(k, v);
+      if(v) p.append(k,v);
     };
 
-    add("cidade", "f-cidade");
-    add("sistema", "f-sistema");
-    add("data_ini", "f-data-ini");
-    add("data_fim", "f-data-fim");
+    add("cidade","f-cidade");
+    add("sistema","f-sistema");
+    add("data_ini","f-data-ini");
+    add("data_fim","f-data-fim");
 
-    if (document.getElementById("f-so-analise").checked) {
-      p.append("apenas_analise", "true");
-    }
-
-    if (document.getElementById("f-so-leitura").checked) {
-      p.append("apenas_leitura", "true");
-    }
+    if(document.getElementById("f-so-analise").checked) p.append("apenas_analise","true");
+    if(document.getElementById("f-so-leitura").checked) p.append("apenas_leitura","true");
 
     const query = p.toString() ? `?${p.toString()}` : "";
     const r = await fetch(`${API}/leituras${query}`);
     const d = await r.json();
-
     const rows = d.rows || [];
 
-    document.getElementById("count-leit").textContent =
-      `${rows.length} registros`;
+    document.getElementById("count-leit").textContent = `${rows.length} registros`;
 
     const tbody = document.querySelector("#tbl-leit tbody");
 
     tbody.innerHTML = rows.map(row => {
-      const tipo =
-        row.Tem_Analise && row.Tem_Leitura_Macro
-          ? `<span class="badge badge-blue">Ambos</span>`
-          : row.Tem_Analise
-          ? `<span class="badge badge-green">Análise</span>`
-          : `<span class="badge badge-yellow">Leitura</span>`;
+      const tipo = row.Tem_Analise && row.Tem_Leitura_Macro
+        ? `<span class="badge badge-blue">Ambos</span>`
+        : row.Tem_Analise
+        ? `<span class="badge badge-green">Análise</span>`
+        : `<span class="badge badge-yellow">Leitura</span>`;
 
       return `
         <tr>
@@ -1200,8 +1347,8 @@ async function carregarLeituras() {
       `;
     }).join("");
 
-  } catch (e) {
-    console.error("Erro ao carregar leituras:", e);
+  }catch(e){
+    console.error("Erro leituras:",e);
   }
 }
 
@@ -1209,65 +1356,38 @@ async function carregarLeituras() {
 // UTILITÁRIOS
 // ======================================================
 
-function num(v) {
-  if (
-    v === null ||
-    v === undefined ||
-    v === "" ||
-    Number.isNaN(Number(v))
-  ) {
-    return 0;
-  }
-
+function num(v){
+  if(v === null || v === undefined || v === "" || Number.isNaN(Number(v))) return 0;
   return Number(v);
 }
 
-function numNull(v) {
-  if (
-    v === null ||
-    v === undefined ||
-    v === "" ||
-    Number.isNaN(Number(v))
-  ) {
-    return null;
-  }
-
+function numNull(v){
+  if(v === null || v === undefined || v === "" || Number.isNaN(Number(v))) return null;
   return Number(v);
 }
 
-const fmt = v =>
-  v != null
-    ? Number(v).toLocaleString("pt-BR", {
-        maximumFractionDigits: 0
-      })
-    : "—";
+const fmt = v => v != null ? Number(v).toLocaleString("pt-BR",{maximumFractionDigits:0}) : "—";
 
-const fmt2 = v =>
-  v != null
-    ? Number(v).toLocaleString("pt-BR", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      })
-    : "—";
+const fmt2 = v => v != null ? Number(v).toLocaleString("pt-BR",{
+  minimumFractionDigits:2,
+  maximumFractionDigits:2
+}) : "—";
 
-const fmt4 = v =>
-  v != null
-    ? Number(v).toLocaleString("pt-BR", {
-        minimumFractionDigits: 4,
-        maximumFractionDigits: 4
-      })
-    : "—";
+const fmt4 = v => v != null ? Number(v).toLocaleString("pt-BR",{
+  minimumFractionDigits:4,
+  maximumFractionDigits:4
+}) : "—";
 
-function escapeHtml(valor) {
+function escapeHtml(valor){
   return String(valor)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
-function filtrarTabela(tblId, q) {
+function filtrarTabela(tblId,q){
   const tbl = document.getElementById(tblId);
   const rows = tbl.querySelectorAll("tbody tr");
   const lq = String(q || "").toLowerCase();
@@ -1279,40 +1399,33 @@ function filtrarTabela(tblId, q) {
 
 let sortDir = {};
 
-function sortTable(tblId, col) {
+function sortTable(tblId,col){
   const tbl = document.getElementById(tblId);
   const tbody = tbl.querySelector("tbody");
   const rows = Array.from(tbody.querySelectorAll("tr"));
 
   sortDir[tblId + col] = !sortDir[tblId + col];
-
   const asc = sortDir[tblId + col];
 
-  rows.sort((a, b) => {
+  rows.sort((a,b) => {
     const va = a.cells[col]?.textContent.trim() || "";
     const vb = b.cells[col]?.textContent.trim() || "";
 
     const na = parseFloat(
-      va
-        .replace(/\./g, "")
-        .replace(",", ".")
-        .replace(/[^\d.-]/g, "")
+      va.replace(/\./g,"").replace(",",".").replace(/[^\d.-]/g,"")
     );
 
     const nb = parseFloat(
-      vb
-        .replace(/\./g, "")
-        .replace(",", ".")
-        .replace(/[^\d.-]/g, "")
+      vb.replace(/\./g,"").replace(",",".").replace(/[^\d.-]/g,"")
     );
 
-    if (!isNaN(na) && !isNaN(nb)) {
+    if(!isNaN(na) && !isNaN(nb)){
       return asc ? na - nb : nb - na;
     }
 
     return asc
-      ? va.localeCompare(vb, "pt-BR")
-      : vb.localeCompare(va, "pt-BR");
+      ? va.localeCompare(vb,"pt-BR")
+      : vb.localeCompare(va,"pt-BR");
   });
 
   rows.forEach(r => tbody.appendChild(r));
