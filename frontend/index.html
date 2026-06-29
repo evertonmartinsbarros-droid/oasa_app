@@ -108,16 +108,15 @@
 
 <div class="container">
 
-  <!-- FILTROS -->
   <div class="filtros">
     <label>Gerência
-      <select id="f-gerencia"><option value="">Todas</option></select>
+      <select id="f-gerencia" onchange="atualizarCascata('gerencia')"><option value="">Todas</option></select>
     </label>
     <label>Pólo
-      <select id="f-polo"><option value="">Todos</option></select>
+      <select id="f-polo" onchange="atualizarCascata('polo')"><option value="">Todos</option></select>
     </label>
     <label>Cidade
-      <select id="f-cidade"><option value="">Todas</option></select>
+      <select id="f-cidade" onchange="atualizarCascata('cidade')"><option value="">Todas</option></select>
     </label>
     <label>Sistema
       <select id="f-sistema"><option value="">Todos</option></select>
@@ -132,7 +131,6 @@
     <button class="btn btn-outline" onclick="limparFiltros()">Limpar</button>
   </div>
 
-  <!-- ABAS -->
   <div class="tabs">
     <div class="tab active" onclick="mudarAba('producao',this)">Produção</div>
     <div class="tab" onclick="mudarAba('acompanhamento',this)">Acompanhamento</div>
@@ -140,7 +138,6 @@
     <div class="tab" onclick="mudarAba('leituras',this)">Leituras</div>
   </div>
 
-  <!-- ABA PRODUÇÃO -->
   <div id="aba-producao" class="tab-content active">
     <div class="cards" id="cards-producao">
       <div class="loading"><span class="spinner"></span>Carregando…</div>
@@ -158,16 +155,16 @@
           <th onclick="sortTable('tbl-producao',3)">Sistema</th>
           <th onclick="sortTable('tbl-producao',4)">Produção (m³)</th>
           <th onclick="sortTable('tbl-producao',5)">Média Diária</th>
-          <th onclick="sortTable('tbl-producao',6)">Vazão (m³/h)</th>
-          <th onclick="sortTable('tbl-producao',7)">Vazão (L/s)</th>
-          <th onclick="sortTable('tbl-producao',8)">Horas</th>
+          <th onclick="sortTable('tbl-producao',6)">Projeção Mensal</th>
+          <th onclick="sortTable('tbl-producao',7)">Vazão (m³/h)</th>
+          <th onclick="sortTable('tbl-producao',8)">Vazão (L/s)</th>
+          <th onclick="sortTable('tbl-producao',9)">Horas</th>
         </tr></thead>
         <tbody></tbody>
       </table>
     </div>
   </div>
 
-  <!-- ABA ACOMPANHAMENTO -->
   <div id="aba-acompanhamento" class="tab-content">
     <div class="table-wrap">
       <div class="table-header">
@@ -190,14 +187,12 @@
     </div>
   </div>
 
-  <!-- ABA QUALIDADE -->
   <div id="aba-qualidade" class="tab-content">
     <div class="qual-grid" id="qual-grid">
       <div class="loading"><span class="spinner"></span>Carregando…</div>
     </div>
   </div>
 
-  <!-- ABA LEITURAS -->
   <div id="aba-leituras" class="tab-content">
     <div class="filtros" style="margin-bottom:14px">
       <label><input type="checkbox" id="f-so-analise"> Só com análise</label>
@@ -230,22 +225,16 @@
 
 </div>
 
-<!-- Gerado no build do Render (ver render.yaml). Define window.OASA_API_BASE.
-     Se o arquivo não existir (ex: abrindo o index.html direto no navegador
-     sem build), o <script> abaixo simplesmente não roda e o fallback de
-     localhost do código principal assume. -->
 <script src="config.js" onerror="console.warn('config.js não encontrado — usando fallback de localhost')"></script>
 
 <script>
-// API: em produção, config.js é gerado pelo buildCommand do Render (ver
-// render.yaml) com window.OASA_API_BASE = URL do backend. Em dev local,
-// cai no fallback de localhost.
 const API = window.OASA_API_BASE || (window.location.hostname === "localhost"
   ? "http://localhost:8000"
   : "");
 
 // ── Estado ────────────────────────────────────────────────────────────────────
 let abaAtiva = "producao";
+let combinacoesFiltros = []; // Guarda a hierarquia de cascata
 
 // ── Inicialização ─────────────────────────────────────────────────────────────
 async function init() {
@@ -269,6 +258,9 @@ async function carregarStatus() {
 async function carregarFiltros() {
   const r = await fetch(`${API}/filtros`);
   const d = await r.json();
+  
+  combinacoesFiltros = d.combinacoes || [];
+  
   preencherSelect("f-gerencia", d.gerencias);
   preencherSelect("f-polo", d.polos);
   preencherSelect("f-cidade", d.cidades);
@@ -279,6 +271,31 @@ function preencherSelect(id, lista) {
   const el = document.getElementById(id);
   const primeiro = el.options[0].outerHTML;
   el.innerHTML = primeiro + lista.map(v => `<option value="${v}">${v}</option>`).join("");
+}
+
+// ── Cascata de Filtros ───────────────────────────────────────────────────────
+function atualizarCascata(nivel) {
+  const ger = document.getElementById("f-gerencia").value;
+  const pol = document.getElementById("f-polo").value;
+  const cid = document.getElementById("f-cidade").value;
+
+  let filtrado = combinacoesFiltros;
+  if (ger) filtrado = filtrado.filter(x => x["Gerência"] === ger);
+  if (pol) filtrado = filtrado.filter(x => x["Pólo"] === pol);
+  if (cid) filtrado = filtrado.filter(x => x["Cidade"] === cid);
+
+  const unicos = (col) => [...new Set(filtrado.map(x => x[col]).filter(Boolean))].sort();
+
+  if (nivel === 'gerencia') {
+    preencherSelect("f-polo", unicos("Pólo"));
+    preencherSelect("f-cidade", unicos("Cidade"));
+    preencherSelect("f-sistema", unicos("Sistema"));
+  } else if (nivel === 'polo') {
+    preencherSelect("f-cidade", unicos("Cidade"));
+    preencherSelect("f-sistema", unicos("Sistema"));
+  } else if (nivel === 'cidade') {
+    preencherSelect("f-sistema", unicos("Sistema"));
+  }
 }
 
 function params() {
@@ -299,7 +316,9 @@ function aplicarFiltros() {
 
 function limparFiltros() {
   ["f-gerencia","f-polo","f-cidade","f-sistema","f-data-ini","f-data-fim"]
-    .forEach(id => { const el = document.getElementById(id); if(el.tagName==="SELECT") el.value=""; else el.value=""; });
+    .forEach(id => { const el = document.getElementById(id); el.value=""; });
+  
+  atualizarCascata('gerencia');
   aplicarFiltros();
 }
 
@@ -321,7 +340,6 @@ async function carregarProducao() {
   const d = await r.json();
   const rows = d.rows || [];
 
-  // Cards de totais
   const tot = rows.reduce((a, r) => { a.prod += r.producao||0; a.n++; return a; }, {prod:0, n:0});
   const avgVazao = rows.filter(r=>r.vazao_m3h).reduce((a,r,_,arr)=>a+r.vazao_m3h/arr.filter(x=>x.vazao_m3h).length, 0);
 
@@ -357,6 +375,7 @@ async function carregarProducao() {
       <td>${r.sistema||""}</td>
       <td>${fmt(r.producao)}</td>
       <td>${r.media_dia ? fmt2(r.media_dia) : "—"}</td>
+      <td>${r.projecao_mensal ? fmt(r.projecao_mensal) : "—"}</td>
       <td>${r.vazao_m3h ? fmt2(r.vazao_m3h) : "—"}</td>
       <td>${r.vazao_ls ? fmt4(r.vazao_ls) : "—"}</td>
       <td>${r.horas ? fmt2(r.horas) : "—"}</td>
@@ -494,3 +513,4 @@ init();
 </script>
 </body>
 </html>
+
