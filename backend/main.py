@@ -56,14 +56,24 @@ def valor_json_seguro(valor):
 
 
 def dict_json_seguro(d):
+    """
+    Aplica conversão segura em um dicionário.
+    """
     return {k: valor_json_seguro(v) for k, v in d.items()}
 
 
 def lista_json_segura(lista):
+    """
+    Aplica conversão segura em uma lista de dicionários.
+    """
     return [dict_json_seguro(item) for item in lista]
 
 
 def arredondar_seguro(valor, casas=2):
+    """
+    Arredonda somente se o valor for válido.
+    Retorna float nativo do Python.
+    """
     if valor is None:
         return None
 
@@ -78,38 +88,6 @@ def arredondar_seguro(valor, casas=2):
         if math.isnan(valor) or math.isinf(valor):
             return None
         return round(valor, casas)
-    except Exception:
-        return None
-
-
-def texto_seguro(valor, padrao=""):
-    if valor is None:
-        return padrao
-
-    try:
-        if pd.isna(valor):
-            return padrao
-    except Exception:
-        pass
-
-    return str(valor)
-
-
-def numero_seguro(valor):
-    if valor is None:
-        return None
-
-    try:
-        if pd.isna(valor):
-            return None
-    except Exception:
-        pass
-
-    try:
-        valor = float(valor)
-        if math.isnan(valor) or math.isinf(valor):
-            return None
-        return valor
     except Exception:
         return None
 
@@ -312,9 +290,10 @@ def producao(
         g = g.sort_values("Data_Hora")
 
         # =========================================================
-        # PRODUÇÃO SOMENTE COM LINHAS QUE TÊM LEITURA
+        # REGRA PRINCIPAL:
+        # PRODUÇÃO USA SOMENTE LINHAS COM LEITURA DE MACRO
         # =========================================================
-        # Linha apenas com análise não entra no cálculo.
+        # Linha apenas com análise não entra no cálculo de produção.
         # Linha apenas com leitura entra.
         # Linha com análise + leitura entra.
 
@@ -327,12 +306,11 @@ def producao(
         leit = leit.sort_values("Data_Hora")
 
         # =========================================================
-        # ESCOLHA DO MACRO PRINCIPAL
+        # ESCOLHER MACRO PARA CÁLCULO DOS EXTREMOS
         # =========================================================
         # Prioridade:
         # 1. Macro Saída - MS_Num
         # 2. Macro Entrada - ME_Num
-        # 3. Macro Processo - MP_Num como fallback
 
         col_macro = None
 
@@ -340,8 +318,6 @@ def producao(
             col_macro = "MS_Num"
         elif "ME_Num" in leit.columns and leit["ME_Num"].notna().any():
             col_macro = "ME_Num"
-        elif "MP_Num" in leit.columns and leit["MP_Num"].notna().any():
-            col_macro = "MP_Num"
 
         if not col_macro:
             continue
@@ -359,15 +335,20 @@ def producao(
         dt_ini = primeira["Data_Hora"]
         dt_fim = ultima["Data_Hora"]
 
-        val_ini = numero_seguro(primeira[col_macro])
-        val_fim = numero_seguro(ultima[col_macro])
+        val_ini = valor_json_seguro(primeira[col_macro])
+        val_fim = valor_json_seguro(ultima[col_macro])
 
-        if val_ini is None or val_fim is None:
+        try:
+            val_ini = float(val_ini)
+            val_fim = float(val_fim)
+        except Exception:
             continue
 
         # =========================================================
-        # PRODUÇÃO BRUTA PELOS EXTREMOS
+        # PRODUÇÃO PRINCIPAL PELOS EXTREMOS
         # =========================================================
+        # Esta é a regra solicitada:
+        # produção média/produção do período = macro final - macro inicial.
 
         prod_extremos = None
 
@@ -375,91 +356,11 @@ def producao(
             prod_extremos = val_fim - val_ini
 
         # =========================================================
-        # DIFERENÇA DO MACRO PROCESSO
+        # PRODUÇÃO DAS LINHAS APENAS PARA CONFERÊNCIA/FALLBACK
         # =========================================================
-        # Necessária para regras:
-        # - SUBTRAIR_MACRO_PROCESSO
-        # - SUBTRAIR_SAIDA2
-
-        dif_mp_extremos = None
-
-        if "MP_Num" in leit.columns:
-            leit_mp = leit.dropna(subset=["MP_Num"]).copy()
-
-            if not leit_mp.empty:
-                leit_mp = leit_mp.sort_values("Data_Hora")
-
-                mp_ini = numero_seguro(leit_mp.iloc[0]["MP_Num"])
-                mp_fim = numero_seguro(leit_mp.iloc[-1]["MP_Num"])
-
-                if mp_ini is not None and mp_fim is not None and mp_fim >= mp_ini:
-                    dif_mp_extremos = mp_fim - mp_ini
-
-        # =========================================================
-        # PARTICULARIDADES
-        # =========================================================
-        # Sem mexer no ETL:
-        # usa as colunas já presentes no DataFrame final:
-        # - Tipo_Regra_Calculo
-        # - Percentual_Desconto
-
-        tipo_regra = "SEM_REGRA"
-        percentual_desconto = None
-
-        if "Tipo_Regra_Calculo" in leit.columns:
-            try:
-                regra_val = None
-
-                if "Tipo_Regra_Calculo" in primeira.index:
-                    regra_val = primeira["Tipo_Regra_Calculo"]
-
-                if regra_val is None or pd.isna(regra_val):
-                    if "Tipo_Regra_Calculo" in ultima.index:
-                        regra_val = ultima["Tipo_Regra_Calculo"]
-
-                if regra_val is not None and not pd.isna(regra_val):
-                    tipo_regra = str(regra_val).strip().upper()
-            except Exception:
-                tipo_regra = "SEM_REGRA"
-
-        if "Percentual_Desconto" in leit.columns:
-            try:
-                pct_val = None
-
-                if "Percentual_Desconto" in primeira.index:
-                    pct_val = primeira["Percentual_Desconto"]
-
-                if pct_val is None or pd.isna(pct_val):
-                    if "Percentual_Desconto" in ultima.index:
-                        pct_val = ultima["Percentual_Desconto"]
-
-                percentual_desconto = numero_seguro(pct_val)
-
-                if percentual_desconto is not None and percentual_desconto > 1:
-                    percentual_desconto = percentual_desconto / 100
-            except Exception:
-                percentual_desconto = None
-
-        # =========================================================
-        # APLICAR PARTICULARIDADES SOBRE A PRODUÇÃO DOS EXTREMOS
-        # =========================================================
-
-        prod_ajustada = prod_extremos
-
-        if prod_ajustada is not None:
-            if tipo_regra == "DESCONTO_PERCENTUAL" and percentual_desconto is not None:
-                prod_ajustada = prod_ajustada * (1 - percentual_desconto)
-
-            elif tipo_regra in ("SUBTRAIR_MACRO_PROCESSO", "SUBTRAIR_SAIDA2"):
-                prod_ajustada = prod_ajustada - (dif_mp_extremos or 0)
-
-            prod_ajustada = max(0, prod_ajustada)
-
-        # =========================================================
-        # PRODUÇÃO DAS LINHAS DO ETL
-        # =========================================================
-        # Fica como conferência/fallback.
-        # Não é a regra principal.
+        # A coluna Producao pode conter particularidades do ETL.
+        # Aqui ela NÃO é a regra principal.
+        # Só entra se a diferença dos extremos não for possível.
 
         prod_linhas = None
 
@@ -469,29 +370,23 @@ def producao(
             if not serie_prod.empty:
                 prod_linhas = float(serie_prod.sum())
 
-        # =========================================================
-        # PRODUÇÃO FINAL
-        # =========================================================
-        # Regra principal:
-        # 1. Extremos com particularidade aplicada.
-        # 2. Fallback: soma da coluna Producao.
+        # Produção final do dashboard:
+        # 1. Diferença dos extremos.
+        # 2. Fallback: soma da coluna Producao das linhas com leitura.
         # 3. Fallback final: zero.
 
-        if prod_ajustada is not None:
-            prod_final = prod_ajustada
-        elif prod_linhas is not None:
-            prod_final = prod_linhas
-        else:
-            prod_final = 0
+        prod = prod_extremos
 
-        ajuste_particularidades = None
+        if prod is None:
+            prod = prod_linhas
 
-        if prod_extremos is not None and prod_final is not None:
-            ajuste_particularidades = prod_extremos - prod_final
+        if prod is None:
+            prod = 0
 
         # =========================================================
         # TEMPO ENTRE EXTREMOS PARA MÉDIA DIÁRIA
         # =========================================================
+        # Usa a data/hora da primeira e última leitura válida.
 
         horas_periodo = None
         dias = None
@@ -503,7 +398,7 @@ def producao(
                 dias = horas_periodo / 24.0
 
                 if dias > 0:
-                    media_dia = prod_final / dias
+                    media_dia = prod / dias
         except Exception:
             horas_periodo = None
             dias = None
@@ -512,7 +407,7 @@ def producao(
         # =========================================================
         # DIFERENÇA DE HORÍMETRO
         # =========================================================
-        # Também usa somente linhas com leitura.
+        # Também usa somente linhas com leitura de macro.
 
         dif_hor = None
 
@@ -522,15 +417,19 @@ def producao(
             if not leit_hor.empty:
                 leit_hor = leit_hor.sort_values("Data_Hora")
 
-                hor_ini = numero_seguro(leit_hor.iloc[0]["Horimetro_Num"])
-                hor_fim = numero_seguro(leit_hor.iloc[-1]["Horimetro_Num"])
+                try:
+                    hor_ini = float(valor_json_seguro(leit_hor.iloc[0]["Horimetro_Num"]))
+                    hor_fim = float(valor_json_seguro(leit_hor.iloc[-1]["Horimetro_Num"]))
 
-                if hor_ini is not None and hor_fim is not None and hor_fim >= hor_ini:
-                    dif_hor = hor_fim - hor_ini
+                    if hor_fim >= hor_ini:
+                        dif_hor = hor_fim - hor_ini
+                except Exception:
+                    dif_hor = None
 
         # =========================================================
         # PROJEÇÃO MENSAL
         # =========================================================
+        # Baseada na média diária da diferença dos extremos.
 
         projecao_mensal = None
 
@@ -548,13 +447,14 @@ def producao(
         # =========================================================
         # VAZÃO PELO HORÍMETRO
         # =========================================================
+        # Usa produção dos extremos / diferença do horímetro.
 
         vazao_m3h = None
         vazao_ls = None
 
         if dif_hor is not None and dif_hor > 0:
             try:
-                vazao_m3h = prod_final / dif_hor
+                vazao_m3h = prod / dif_hor
                 vazao_ls = vazao_m3h * 1000 / 3600
             except Exception:
                 vazao_m3h = None
@@ -566,32 +466,25 @@ def producao(
             "cidade": str(valor_json_seguro(cid)),
             "sistema": str(valor_json_seguro(sis)),
 
-            # Produção final:
-            # extremos com particularidade aplicada.
-            "producao": arredondar_seguro(prod_final, 2),
+            # Produção principal: diferença dos extremos.
+            "producao": arredondar_seguro(prod, 2),
 
             # Conferências.
             "producao_extremos": arredondar_seguro(prod_extremos, 2),
             "producao_linhas": arredondar_seguro(prod_linhas, 2),
-            "ajuste_particularidades": arredondar_seguro(ajuste_particularidades, 2),
 
-            # Regra aplicada.
-            "tipo_regra_calculo": tipo_regra,
-            "percentual_desconto": arredondar_seguro(percentual_desconto, 4),
-            "dif_macro_processo": arredondar_seguro(dif_mp_extremos, 2),
-
-            # Média/projeção.
+            # Média/projeção baseadas nos extremos.
             "media_dia": arredondar_seguro(media_dia, 2),
             "projecao_mensal": arredondar_seguro(projecao_mensal, 2),
 
-            # Vazão.
+            # Vazão baseada na produção dos extremos e horímetro.
             "vazao_m3h": arredondar_seguro(vazao_m3h, 2),
             "vazao_ls": arredondar_seguro(vazao_ls, 4),
 
             # Tempo corrido entre primeira e última leitura.
             "horas": arredondar_seguro(horas_periodo, 2),
 
-            # Diferença de horímetro para H/D no frontend.
+            # Diferença do horímetro para o frontend calcular H/D.
             "horimetro_horas": arredondar_seguro(dif_hor, 2),
         }
 
