@@ -76,9 +76,7 @@ def status():
 def filtros():
     df = get_df_seguro()
     
-    # Extrai as combinações únicas para a cascata no frontend
     cols = ["Gerência", "Pólo", "Cidade", "Sistema"]
-    
     # .astype(object) remove a restrição de colunas categóricas permitindo o fillna("")
     comb = df[cols].drop_duplicates().astype(object).fillna("")
 
@@ -107,44 +105,59 @@ def producao(
     rows = []
 
     for (ger, pol, cid, sis), g in grp:
+        # Ordena cronologicamente
         g = g.sort_values("Data_Hora")
-        leit = g[g["Tem_Leitura_Macro"]]
+        leit = g[g["Tem_Leitura_Macro"]].dropna(subset=["Data_Hora"])
+
         if leit.empty:
             continue
 
-        dt_ini, dt_fim = leit["Data_Hora"].min(), leit["Data_Hora"].max()
-        horas = (dt_fim - dt_ini).total_seconds() / 3600 if dt_ini != dt_fim else None
+        # REGRA 1: Escolher a coluna de cálculo. Prioridade para Macro Saída.
+        col_macro = "MS_Num" if leit["MS_Num"].notna().any() else "ME_Num"
+        
+        # Filtra para ter apenas os registros onde o macro escolhido não está vazio
+        leit_macro = leit.dropna(subset=[col_macro])
 
-        hor_ini = leit.loc[leit["Data_Hora"] == dt_ini, "Horimetro_Num"].max()
-        hor_fim = leit.loc[leit["Data_Hora"] == dt_fim, "Horimetro_Num"].max()
-        dif_hor = (hor_fim - hor_ini) if pd.notna(hor_ini) and pd.notna(hor_fim) and hor_fim >= hor_ini else None
+        if leit_macro.empty:
+            continue
 
-       # Encontra os hidrômetros exatos dos extremos para o cálculo real
-        # Prioriza o Macro Saída (MS_Num), se não houver, tenta o Macro Entrada (ME_Num)
-        if not leit.empty:
-            col_macro = "MS_Num" if leit["MS_Num"].notna().any() else "ME_Num"
-            
-            # Pega o valor do hidrômetro na última e na primeira leitura do período
-            val_fim = leit.loc[leit["Data_Hora"] == dt_fim, col_macro].max()
-            val_ini = leit.loc[leit["Data_Hora"] == dt_ini, col_macro].min()
-            
-            if pd.notna(val_fim) and pd.notna(val_ini) and val_fim >= val_ini:
-                prod = val_fim - val_ini
-            else:
-                prod = g["Producao"].sum() # Fallback caso falte o hidrômetro nos extremos
+        # Pega exatamente a primeira e a última linha válidas desse macro
+        primeira = leit_macro.iloc[0]
+        ultima = leit_macro.iloc[-1]
+
+        dt_ini = primeira["Data_Hora"]
+        dt_fim = ultima["Data_Hora"]
+        val_ini = primeira[col_macro]
+        val_fim = ultima[col_macro]
+
+        # REGRA 2: Cálculo real baseado nos extremos
+        # Verifica se o tempo passou e o hidrômetro avançou (não foi trocado)
+        if dt_fim > dt_ini and val_fim >= val_ini:
+            prod = val_fim - val_ini
+            horas = (dt_fim - dt_ini).total_seconds() / 3600
+            dias = horas / 24.0
+            media_dia = prod / dias if dias > 0 else None
         else:
-            prod = 0
-            
-        if pd.isna(prod):
-            prod = 0
+            # Fallback de segurança: se for a mesma hora ou trocaram o hidrômetro no meio do mês
+            prod = g["Producao"].sum()
+            if pd.isna(prod): prod = 0
+            horas = (leit["Data_Hora"].max() - leit["Data_Hora"].min()).total_seconds() / 3600
+            dias = horas / 24.0 if horas else None
+            media_dia = (prod / dias) if (dias and dias > 0) else None
 
-        dias = horas / 24 if horas else None
-        media_dia = prod / dias if dias and dias > 0 else None
+        # Diferença de Horímetro (para Vazão)
+        leit_hor = leit.dropna(subset=["Horimetro_Num"])
+        dif_hor = None
+        if not leit_hor.empty:
+            hor_ini = leit_hor.iloc[0]["Horimetro_Num"]
+            hor_fim = leit_hor.iloc[-1]["Horimetro_Num"]
+            if hor_fim >= hor_ini:
+                dif_hor = hor_fim - hor_ini
 
         # Projeção Mensal
         projecao_mensal = None
-        if media_dia and pd.notna(dt_fim):
-            _, dias_no_mes = calendar.monthrange(dt_fim.year, dt_fim.month)
+        if media_dia and pd.notna(ultima["Data_Hora"]):
+            _, dias_no_mes = calendar.monthrange(ultima["Data_Hora"].year, ultima["Data_Hora"].month)
             projecao_mensal = media_dia * dias_no_mes
 
         vazao_m3h = prod / dif_hor if dif_hor and dif_hor > 0 else None
@@ -264,4 +277,3 @@ def leituras(
 
     rows = df.to_dict("records")
     return {"rows": rows, "total": len(rows)}
-
