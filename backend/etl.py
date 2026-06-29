@@ -191,7 +191,9 @@ def _executar_etl() -> pd.DataFrame:
         try:
             f = _ler_sheet(service, sid, ABA_LEITURAS, colunas_filtro=COLUNAS_LEITURAS)
             if not f.empty:
-                print(f"[ETL] Planilha {sid}: {len(f)} linhas, colunas: {list(f.columns)}")
+                # Remove colunas totalmente vazias para evitar FutureWarnings do Pandas
+                f = f.dropna(axis=1, how='all')
+                print(f"[ETL] Planilha {sid}: {len(f)} linhas lidas.")
                 frames.append(f)
         except Exception as e:
             print(f"[ETL] Erro ao ler planilha {sid}: {e}")
@@ -210,17 +212,22 @@ def _executar_etl() -> pd.DataFrame:
     if "Gerência" not in df.columns:
         df["Gerência"] = "OASA"
 
+    # Conversão de Data robusta (ignora formatações americanas e garante leitura de todos)
     df["Data_Hora"] = pd.to_datetime(
         df.get("Data/Hora (Leitura)", pd.Series(dtype="object")),
-        dayfirst=True, errors="coerce"
+        dayfirst=True, errors="coerce", format="mixed"
     )
     df = df.dropna(subset=["Data_Hora"]).copy()
     df["Data"] = df["Data_Hora"].dt.date
     df.drop(columns=["Data/Hora (Leitura)"], errors="ignore", inplace=True)
 
+    # Função inteligente para números (Lida com pontos e vírgulas misturados)
     def to_float32(col_name, limit=None):
         if col_name in df.columns:
-            s = pd.to_numeric(df[col_name].astype(str).str.replace(",", "."), errors="coerce")
+            s = df[col_name].astype(str).str.strip()
+            # Se encontrar vírgula, assume padrão BR: remove pontos de milhar e converte vírgula pra ponto
+            s = s.apply(lambda x: x.replace(".", "").replace(",", ".") if "," in x else x)
+            s = pd.to_numeric(s, errors="coerce")
             if limit: s = s.where(s.abs() <= limit)
             return s.astype("float32")
         return pd.Series(dtype="float32")
@@ -234,7 +241,6 @@ def _executar_etl() -> pd.DataFrame:
     gc.collect()
 
     df = df.sort_values("Data_Hora")
-
     df = df.groupby(["Cidade", "Sistema", "Data"], as_index=False).last()
 
     for col in col_str:
@@ -268,7 +274,7 @@ def _executar_etl() -> pd.DataFrame:
         df.loc[mask_midnight, "Data_Hora"] + pd.Timedelta(hours=23, minutes=59)
     )
 
-    print(f"[ETL] Concluído. Shape: {df.shape}. Colunas: {list(df.columns)}")
+    print(f"[ETL] Concluído. Shape: {df.shape}.")
     gc.collect()
     return df
 
@@ -287,4 +293,3 @@ def get_cache_info():
     idade = int(time.time() - _cache["ts"])
     linhas = len(_cache["df"])
     return {"status": "ok", "linhas": linhas, "idade_segundos": idade, "ttl": CACHE_TTL_SEGUNDOS}
-
