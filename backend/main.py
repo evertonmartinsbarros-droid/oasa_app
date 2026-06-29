@@ -56,14 +56,24 @@ def valor_json_seguro(valor):
 
 
 def dict_json_seguro(d):
+    """
+    Aplica conversão segura em um dicionário.
+    """
     return {k: valor_json_seguro(v) for k, v in d.items()}
 
 
 def lista_json_segura(lista):
+    """
+    Aplica conversão segura em uma lista de dicionários.
+    """
     return [dict_json_seguro(item) for item in lista]
 
 
 def arredondar_seguro(valor, casas=2):
+    """
+    Arredonda somente se o valor for válido.
+    Retorna float nativo do Python.
+    """
     if valor is None:
         return None
 
@@ -280,18 +290,12 @@ def producao(
         g = g.sort_values("Data_Hora")
 
         # =========================================================
-        # REGRA PRINCIPAL
+        # REGRA PRINCIPAL:
+        # PRODUÇÃO USA SOMENTE LINHAS COM LEITURA DE MACRO
         # =========================================================
-        # Produção usa SOMENTE linhas com leitura de macro.
-        # Linha apenas com análise não entra em:
-        # - produção
-        # - média diária
-        # - vazão
-        # - horímetro
-        # - projeção mensal
-        #
-        # Linha com leitura entra, mesmo que não tenha análise.
-        # Linha com análise + leitura entra normalmente.
+        # Linha apenas com análise não entra no cálculo de produção.
+        # Linha apenas com leitura entra.
+        # Linha com análise + leitura entra.
 
         leit = g[g["Tem_Leitura_Macro"] == True].copy()
         leit = leit.dropna(subset=["Data_Hora"])
@@ -302,8 +306,11 @@ def producao(
         leit = leit.sort_values("Data_Hora")
 
         # =========================================================
-        # ESCOLHA DO MACRO PARA EXTREMOS
+        # ESCOLHER MACRO PARA CÁLCULO DOS EXTREMOS
         # =========================================================
+        # Prioridade:
+        # 1. Macro Saída - MS_Num
+        # 2. Macro Entrada - ME_Num
 
         col_macro = None
 
@@ -335,53 +342,51 @@ def producao(
             val_ini = float(val_ini)
             val_fim = float(val_fim)
         except Exception:
-            val_ini = None
-            val_fim = None
+            continue
 
         # =========================================================
-        # PRODUÇÃO BRUTA PELO MACRO
+        # PRODUÇÃO PRINCIPAL PELOS EXTREMOS
         # =========================================================
-        # Apenas para conferência.
-        # Não é a produção final quando existir coluna Producao.
+        # Esta é a regra solicitada:
+        # produção média/produção do período = macro final - macro inicial.
 
-        prod_bruta_macro = None
+        prod_extremos = None
 
-        if (
-            val_ini is not None
-            and val_fim is not None
-            and dt_fim > dt_ini
-            and val_fim >= val_ini
-        ):
-            prod_bruta_macro = val_fim - val_ini
+        if dt_fim > dt_ini and val_fim >= val_ini:
+            prod_extremos = val_fim - val_ini
 
         # =========================================================
-        # PRODUÇÃO AJUSTADA COM PARTICULARIDADES
+        # PRODUÇÃO DAS LINHAS APENAS PARA CONFERÊNCIA/FALLBACK
         # =========================================================
-        # Prioridade:
-        # 1. Somar a coluna Producao SOMENTE nas linhas com leitura.
-        #    Esta coluna deve vir do ETL já com particularidades descontadas.
-        #
-        # 2. Se não existir Producao ou estiver vazia, usa diferença bruta
-        #    do macro como fallback.
+        # A coluna Producao pode conter particularidades do ETL.
+        # Aqui ela NÃO é a regra principal.
+        # Só entra se a diferença dos extremos não for possível.
 
-        prod = None
+        prod_linhas = None
 
         if "Producao" in leit.columns:
             serie_prod = pd.to_numeric(leit["Producao"], errors="coerce").dropna()
 
             if not serie_prod.empty:
-                prod = float(serie_prod.sum())
+                prod_linhas = float(serie_prod.sum())
+
+        # Produção final do dashboard:
+        # 1. Diferença dos extremos.
+        # 2. Fallback: soma da coluna Producao das linhas com leitura.
+        # 3. Fallback final: zero.
+
+        prod = prod_extremos
 
         if prod is None:
-            prod = prod_bruta_macro
+            prod = prod_linhas
 
         if prod is None:
             prod = 0
 
         # =========================================================
-        # TEMPO DO PERÍODO PARA MÉDIA DIÁRIA
+        # TEMPO ENTRE EXTREMOS PARA MÉDIA DIÁRIA
         # =========================================================
-        # Usa primeira e última leitura real, não linha apenas de análise.
+        # Usa a data/hora da primeira e última leitura válida.
 
         horas_periodo = None
         dias = None
@@ -402,7 +407,7 @@ def producao(
         # =========================================================
         # DIFERENÇA DE HORÍMETRO
         # =========================================================
-        # Usa somente linhas com leitura de macro.
+        # Também usa somente linhas com leitura de macro.
 
         dif_hor = None
 
@@ -424,7 +429,7 @@ def producao(
         # =========================================================
         # PROJEÇÃO MENSAL
         # =========================================================
-        # Usa produção já ajustada e dias do mês da última leitura.
+        # Baseada na média diária da diferença dos extremos.
 
         projecao_mensal = None
 
@@ -442,7 +447,7 @@ def producao(
         # =========================================================
         # VAZÃO PELO HORÍMETRO
         # =========================================================
-        # Usa produção ajustada / diferença de horímetro.
+        # Usa produção dos extremos / diferença do horímetro.
 
         vazao_m3h = None
         vazao_ls = None
@@ -461,26 +466,25 @@ def producao(
             "cidade": str(valor_json_seguro(cid)),
             "sistema": str(valor_json_seguro(sis)),
 
-            # Produção final já considerando particularidades
-            # e ignorando linhas apenas com análise.
+            # Produção principal: diferença dos extremos.
             "producao": arredondar_seguro(prod, 2),
 
-            # Conferência: diferença pura do macro.
-            "producao_bruta_macro": arredondar_seguro(prod_bruta_macro, 2),
+            # Conferências.
+            "producao_extremos": arredondar_seguro(prod_extremos, 2),
+            "producao_linhas": arredondar_seguro(prod_linhas, 2),
 
-            # Média e projeção usando produção ajustada.
+            # Média/projeção baseadas nos extremos.
             "media_dia": arredondar_seguro(media_dia, 2),
             "projecao_mensal": arredondar_seguro(projecao_mensal, 2),
 
-            # Vazão usando produção ajustada / horímetro.
+            # Vazão baseada na produção dos extremos e horímetro.
             "vazao_m3h": arredondar_seguro(vazao_m3h, 2),
             "vazao_ls": arredondar_seguro(vazao_ls, 4),
 
-            # Tempo corrido entre primeira e última leitura de macro.
+            # Tempo corrido entre primeira e última leitura.
             "horas": arredondar_seguro(horas_periodo, 2),
 
-            # Diferença real do horímetro.
-            # O frontend usa isto para H/D.
+            # Diferença do horímetro para o frontend calcular H/D.
             "horimetro_horas": arredondar_seguro(dif_hor, 2),
         }
 
