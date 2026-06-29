@@ -202,8 +202,6 @@ def _executar_etl() -> pd.DataFrame:
     del frames
     gc.collect()
 
-    # Limpeza de texto — mantém como string pura (NÃO converte para category ainda)
-    # O Pandas 3.x remove colunas category do resultado do groupby
     col_str = ["Pólo", "Cidade", "Sistema", "Gerência"]
     for col in col_str:
         if col in df.columns:
@@ -237,10 +235,8 @@ def _executar_etl() -> pd.DataFrame:
 
     df = df.sort_values("Data_Hora")
 
-    # groupby com strings — Pandas 3.x preserva colunas string no resultado
     df = df.groupby(["Cidade", "Sistema", "Data"], as_index=False).last()
 
-    # Converte para category DEPOIS do groupby
     for col in col_str:
         if col in df.columns:
             df[col] = df[col].astype("category")
@@ -291,3 +287,4 @@ def get_cache_info():
     idade = int(time.time() - _cache["ts"])
     linhas = len(_cache["df"])
     return {"status": "ok", "linhas": linhas, "idade_segundos": idade, "ttl": CACHE_TTL_SEGUNDOS}
+
