@@ -4,100 +4,404 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OASA — Dashboard Operacional</title>
+
 <style>
   :root {
-    --bg: #0f172a; --surface: #1e293b; --surface2: #273549;
-    --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
-    --blue: #3b82f6; --green: #22c55e; --yellow: #f59e0b;
-    --red: #ef4444; --teal: #14b8a6;
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #273549;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --blue: #3b82f6;
+    --green: #22c55e;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --teal: #14b8a6;
+    --purple: #8b5cf6;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 14px; }
 
-  header { background: var(--surface); border-bottom: 1px solid var(--border);
-    padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
-  header h1 { font-size: 18px; font-weight: 700; }
-  header span { font-size: 12px; color: var(--muted); margin-left: auto; }
-  #status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  #status-dot.ok { background: var(--green); }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-  .container { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+  }
 
-  /* Filtros */
-  .filtros { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 20px; }
-  .filtros label { display: flex; flex-direction: column; gap: 4px; font-size: 11px;
-    color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-  .filtros select, .filtros input {
-    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-    border-radius: 6px; padding: 7px 10px; font-size: 13px; min-width: 140px; }
-  .filtros select:focus, .filtros input:focus { outline: none; border-color: var(--blue); }
-  .btn { background: var(--blue); color: #fff; border: none; border-radius: 6px;
-    padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
-  .btn:hover { opacity: .85; }
-  .btn-sm { padding: 5px 12px; font-size: 12px; }
-  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
-  .btn-outline:hover { border-color: var(--blue); color: var(--blue); }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
 
-  /* Abas */
-  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
-  .tab { padding: 9px 18px; cursor: pointer; border-radius: 6px 6px 0 0; font-size: 13px;
-    font-weight: 500; color: var(--muted); border: 1px solid transparent; border-bottom: none; }
-  .tab.active { background: var(--surface); border-color: var(--border); color: var(--text); }
-  .tab-content { display: none; }
-  .tab-content.active { display: block; }
+  header h1 {
+    font-size: 18px;
+    font-weight: 700;
+  }
 
-  /* Cards */
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-  .card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
-  .card .value { font-size: 24px; font-weight: 700; }
-  .card .sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  .c-blue { border-top: 3px solid var(--blue); }
-  .c-green { border-top: 3px solid var(--green); }
-  .c-yellow { border-top: 3px solid var(--yellow); }
-  .c-teal { border-top: 3px solid var(--teal); }
+  header span {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+  }
 
-  /* Tabelas */
-  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: auto; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: var(--surface2); padding: 10px 12px; text-align: left; font-size: 11px;
-    text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-bottom: 1px solid var(--border);
-    cursor: pointer; white-space: nowrap; }
-  th:hover { color: var(--text); }
-  td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: var(--surface2); }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-  .badge-green { background: #16a34a22; color: var(--green); }
-  .badge-red   { background: #dc262622; color: var(--red); }
-  .badge-yellow { background: #d9770622; color: var(--yellow); }
-  .badge-blue  { background: #2563eb22; color: var(--blue); }
-  .rank-1 { color: var(--red); font-weight: 700; }
-  .rank-2 { color: var(--yellow); }
-  .rank-ok { color: var(--green); }
+  #status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
 
-  /* Qualidade */
-  .qual-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-  .qual-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
-  .qual-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
-  .qual-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; margin: 6px 0; }
-  .qual-bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
-  .qual-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  #status-dot.ok {
+    background: var(--green);
+  }
 
-  /* Loading */
-  .loading { text-align: center; padding: 60px; color: var(--muted); }
-  .spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid var(--border);
-    border-top-color: var(--blue); border-radius: 50%; animation: spin .8s linear infinite; margin-right: 8px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .container {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 20px 24px;
+  }
 
-  .search-bar { padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text); font-size: 13px; width: 220px; }
-  .search-bar:focus { outline: none; border-color: var(--blue); }
-  .table-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; }
-  .table-count { font-size: 12px; color: var(--muted); }
+  .filtros {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+  }
+
+  .filtros label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+
+  .filtros select,
+  .filtros input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 13px;
+    min-width: 140px;
+  }
+
+  .filtros select:focus,
+  .filtros input:focus {
+    outline: none;
+    border-color: var(--blue);
+  }
+
+  .btn {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn:hover {
+    opacity: .85;
+  }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  .btn-outline:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab {
+    padding: 9px 18px;
+    cursor: pointer;
+    border-radius: 6px 6px 0 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    border: 1px solid transparent;
+    border-bottom: none;
+  }
+
+  .tab.active {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .tab-content {
+    display: none;
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .card .label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-bottom: 8px;
+  }
+
+  .card .value {
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .card .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .c-blue {
+    border-top: 3px solid var(--blue);
+  }
+
+  .c-green {
+    border-top: 3px solid var(--green);
+  }
+
+  .c-yellow {
+    border-top: 3px solid var(--yellow);
+  }
+
+  .c-teal {
+    border-top: 3px solid var(--teal);
+  }
+
+  .c-red {
+    border-top: 3px solid var(--red);
+  }
+
+  .c-purple {
+    border-top: 3px solid var(--purple);
+  }
+
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th {
+    background: var(--surface2);
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  th:hover {
+    color: var(--text);
+  }
+
+  td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tr:hover td {
+    background: var(--surface2);
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .badge-green {
+    background: #16a34a22;
+    color: var(--green);
+  }
+
+  .badge-red {
+    background: #dc262622;
+    color: var(--red);
+  }
+
+  .badge-yellow {
+    background: #d9770622;
+    color: var(--yellow);
+  }
+
+  .badge-blue {
+    background: #2563eb22;
+    color: var(--blue);
+  }
+
+  .rank-1 {
+    color: var(--red);
+    font-weight: 700;
+  }
+
+  .rank-2 {
+    color: var(--yellow);
+  }
+
+  .rank-ok {
+    color: var(--green);
+  }
+
+  .qual-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+  }
+
+  .qual-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+
+  .qual-card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .qual-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--border);
+    overflow: hidden;
+    margin: 6px 0;
+  }
+
+  .qual-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width .4s;
+  }
+
+  .qual-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .loading {
+    text-align: center;
+    padding: 60px;
+    color: var(--muted);
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    margin-right: 8px;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .search-bar {
+    padding: 8px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    width: 220px;
+  }
+
+  .search-bar:focus {
+    outline: none;
+    border-color: var(--blue);
+  }
+
+  .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+  }
+
+  .table-count {
+    font-size: 12px;
+    color: var(--muted);
+  }
 </style>
 </head>
+
 <body>
 
 <header>
@@ -110,23 +414,37 @@
 
   <div class="filtros">
     <label>Gerência
-      <select id="f-gerencia" onchange="atualizarCascata('gerencia')"><option value="">Todas</option></select>
+      <select id="f-gerencia" onchange="atualizarCascata('gerencia')">
+        <option value="">Todas</option>
+      </select>
     </label>
+
     <label>Pólo
-      <select id="f-polo" onchange="atualizarCascata('polo')"><option value="">Todos</option></select>
+      <select id="f-polo" onchange="atualizarCascata('polo')">
+        <option value="">Todos</option>
+      </select>
     </label>
+
     <label>Cidade
-      <select id="f-cidade" onchange="atualizarCascata('cidade')"><option value="">Todas</option></select>
+      <select id="f-cidade" onchange="atualizarCascata('cidade')">
+        <option value="">Todas</option>
+      </select>
     </label>
+
     <label>Sistema
-      <select id="f-sistema"><option value="">Todos</option></select>
+      <select id="f-sistema">
+        <option value="">Todos</option>
+      </select>
     </label>
+
     <label>Data inicial
       <input type="date" id="f-data-ini">
     </label>
+
     <label>Data final
       <input type="date" id="f-data-fim">
     </label>
+
     <button class="btn" onclick="aplicarFiltros()">Aplicar</button>
     <button class="btn btn-outline" onclick="limparFiltros()">Limpar</button>
   </div>
@@ -142,24 +460,28 @@
     <div class="cards" id="cards-producao">
       <div class="loading"><span class="spinner"></span>Carregando…</div>
     </div>
+
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-count" id="count-producao"></span>
         <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-producao',this.value)">
       </div>
+
       <table id="tbl-producao">
-        <thead><tr>
-          <th onclick="sortTable('tbl-producao',0)">Gerência</th>
-          <th onclick="sortTable('tbl-producao',1)">Pólo</th>
-          <th onclick="sortTable('tbl-producao',2)">Cidade</th>
-          <th onclick="sortTable('tbl-producao',3)">Sistema</th>
-          <th onclick="sortTable('tbl-producao',4)">Produção (m³)</th>
-          <th onclick="sortTable('tbl-producao',5)">Média Diária</th>
-          <th onclick="sortTable('tbl-producao',6)">Projeção Mensal</th>
-          <th onclick="sortTable('tbl-producao',7)">Vazão (m³/h)</th>
-          <th onclick="sortTable('tbl-producao',8)">Vazão (L/s)</th>
-          <th onclick="sortTable('tbl-producao',9)">Horas</th>
-        </tr></thead>
+        <thead>
+          <tr>
+            <th onclick="sortTable('tbl-producao',0)">Gerência</th>
+            <th onclick="sortTable('tbl-producao',1)">Pólo</th>
+            <th onclick="sortTable('tbl-producao',2)">Cidade</th>
+            <th onclick="sortTable('tbl-producao',3)">Sistema</th>
+            <th onclick="sortTable('tbl-producao',4)">Produção Período</th>
+            <th onclick="sortTable('tbl-producao',5)">Média Diária</th>
+            <th onclick="sortTable('tbl-producao',6)">Produção Mês</th>
+            <th onclick="sortTable('tbl-producao',7)">Vazão Média L/s</th>
+            <th onclick="sortTable('tbl-producao',8)">H/D</th>
+            <th onclick="sortTable('tbl-producao',9)">Horas Totais Mês</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
@@ -171,17 +493,20 @@
         <span class="table-count" id="count-acomp"></span>
         <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-acomp',this.value)">
       </div>
+
       <table id="tbl-acomp">
-        <thead><tr>
-          <th onclick="sortTable('tbl-acomp',0)">Rank</th>
-          <th onclick="sortTable('tbl-acomp',1)">Gerência</th>
-          <th onclick="sortTable('tbl-acomp',2)">Pólo</th>
-          <th onclick="sortTable('tbl-acomp',3)">Cidade</th>
-          <th onclick="sortTable('tbl-acomp',4)">Sistema</th>
-          <th onclick="sortTable('tbl-acomp',5)">Análises</th>
-          <th onclick="sortTable('tbl-acomp',6)">Leituras Macro</th>
-          <th>Status</th>
-        </tr></thead>
+        <thead>
+          <tr>
+            <th onclick="sortTable('tbl-acomp',0)">Rank</th>
+            <th onclick="sortTable('tbl-acomp',1)">Gerência</th>
+            <th onclick="sortTable('tbl-acomp',2)">Pólo</th>
+            <th onclick="sortTable('tbl-acomp',3)">Cidade</th>
+            <th onclick="sortTable('tbl-acomp',4)">Sistema</th>
+            <th onclick="sortTable('tbl-acomp',5)">Análises</th>
+            <th onclick="sortTable('tbl-acomp',6)">Leituras Macro</th>
+            <th>Status</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
@@ -195,29 +520,40 @@
 
   <div id="aba-leituras" class="tab-content">
     <div class="filtros" style="margin-bottom:14px">
-      <label><input type="checkbox" id="f-so-analise"> Só com análise</label>
-      <label><input type="checkbox" id="f-so-leitura"> Só com leitura</label>
+      <label>
+        <input type="checkbox" id="f-so-analise" onchange="carregarLeituras()">
+        Só com análise
+      </label>
+
+      <label>
+        <input type="checkbox" id="f-so-leitura" onchange="carregarLeituras()">
+        Só com leitura
+      </label>
     </div>
+
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-count" id="count-leit"></span>
         <input class="search-bar" placeholder="Buscar…" oninput="filtrarTabela('tbl-leit',this.value)">
       </div>
+
       <table id="tbl-leit">
-        <thead><tr>
-          <th>Data/Hora</th>
-          <th>Cidade</th>
-          <th>Sistema</th>
-          <th>Macro Entrada</th>
-          <th>Macro Saída</th>
-          <th>Horímetro</th>
-          <th>Cloro</th>
-          <th>Turbidez</th>
-          <th>Cor</th>
-          <th>Fluoreto</th>
-          <th>Produção</th>
-          <th>Tipo</th>
-        </tr></thead>
+        <thead>
+          <tr>
+            <th>Data/Hora</th>
+            <th>Cidade</th>
+            <th>Sistema</th>
+            <th>Macro Entrada</th>
+            <th>Macro Saída</th>
+            <th>Horímetro</th>
+            <th>Cloro</th>
+            <th>Turbidez</th>
+            <th>Cor</th>
+            <th>Fluoreto</th>
+            <th>Produção</th>
+            <th>Tipo</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
@@ -225,18 +561,22 @@
 
 </div>
 
-<script src="config.js" onerror="console.warn('config.js não encontrado — usando fallback de localhost')"></script>
+<script src="config.js" onerror="console.warn('config.js não encontrado — usando fallback')"></script>
 
 <script>
-const API = window.OASA_API_BASE || (window.location.hostname === "localhost"
-  ? "http://localhost:8000"
-  : "");
+const API = window.OASA_API_BASE || (
+  window.location.hostname === "localhost"
+    ? "http://localhost:8000"
+    : ""
+);
 
-// ── Estado ────────────────────────────────────────────────────────────────────
 let abaAtiva = "producao";
-let combinacoesFiltros = []; // Guarda a hierarquia de cascata
+let combinacoesFiltros = [];
 
-// ── Inicialização ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Inicialização
+// ─────────────────────────────────────────────
+
 async function init() {
   await carregarFiltros();
   await carregarStatus();
@@ -247,270 +587,636 @@ async function carregarStatus() {
   try {
     const r = await fetch(`${API}/status`);
     const d = await r.json();
+
     document.getElementById("status-dot").className = "ok";
     document.getElementById("header-info").textContent =
-      `${d.cache.linhas?.toLocaleString("pt-BR") ?? "?"} registros · atualizado há ${d.cache.idade_segundos}s`;
-  } catch(e) {
+      `${d.cache?.linhas?.toLocaleString("pt-BR") ?? "?"} registros · atualizado há ${d.cache?.idade_segundos ?? "?"}s`;
+  } catch (e) {
     document.getElementById("header-info").textContent = "Erro ao conectar";
   }
 }
 
 async function carregarFiltros() {
-  const r = await fetch(`${API}/filtros`);
-  const d = await r.json();
-  
-  combinacoesFiltros = d.combinacoes || [];
-  
-  preencherSelect("f-gerencia", d.gerencias);
-  preencherSelect("f-polo", d.polos);
-  preencherSelect("f-cidade", d.cidades);
-  preencherSelect("f-sistema", d.sistemas);
+  try {
+    const r = await fetch(`${API}/filtros`);
+    const d = await r.json();
+
+    combinacoesFiltros = d.combinacoes || [];
+
+    preencherSelect("f-gerencia", d.gerencias || []);
+    preencherSelect("f-polo", d.polos || []);
+    preencherSelect("f-cidade", d.cidades || []);
+    preencherSelect("f-sistema", d.sistemas || []);
+  } catch (e) {
+    console.error("Erro ao carregar filtros:", e);
+  }
 }
 
 function preencherSelect(id, lista) {
   const el = document.getElementById(id);
   const primeiro = el.options[0].outerHTML;
-  el.innerHTML = primeiro + lista.map(v => `<option value="${v}">${v}</option>`).join("");
+
+  el.innerHTML = primeiro + [...new Set(lista)]
+    .filter(v => v !== null && v !== undefined && String(v).trim() !== "")
+    .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"))
+    .map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`)
+    .join("");
 }
 
-// ── Cascata de Filtros ───────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Cascata
+// ─────────────────────────────────────────────
+
 function atualizarCascata(nivel) {
   const ger = document.getElementById("f-gerencia").value;
   const pol = document.getElementById("f-polo").value;
   const cid = document.getElementById("f-cidade").value;
 
   let filtrado = combinacoesFiltros;
+
   if (ger) filtrado = filtrado.filter(x => x["Gerência"] === ger);
   if (pol) filtrado = filtrado.filter(x => x["Pólo"] === pol);
   if (cid) filtrado = filtrado.filter(x => x["Cidade"] === cid);
 
-  const unicos = (col) => [...new Set(filtrado.map(x => x[col]).filter(Boolean))].sort();
+  const unicos = col => [...new Set(
+    filtrado
+      .map(x => x[col])
+      .filter(v => v !== null && v !== undefined && String(v).trim() !== "")
+  )].sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
 
-  if (nivel === 'gerencia') {
+  if (nivel === "gerencia") {
+    document.getElementById("f-polo").value = "";
+    document.getElementById("f-cidade").value = "";
+    document.getElementById("f-sistema").value = "";
+
     preencherSelect("f-polo", unicos("Pólo"));
     preencherSelect("f-cidade", unicos("Cidade"));
     preencherSelect("f-sistema", unicos("Sistema"));
-  } else if (nivel === 'polo') {
+  }
+
+  if (nivel === "polo") {
+    document.getElementById("f-cidade").value = "";
+    document.getElementById("f-sistema").value = "";
+
     preencherSelect("f-cidade", unicos("Cidade"));
     preencherSelect("f-sistema", unicos("Sistema"));
-  } else if (nivel === 'cidade') {
+  }
+
+  if (nivel === "cidade") {
+    document.getElementById("f-sistema").value = "";
+
     preencherSelect("f-sistema", unicos("Sistema"));
   }
 }
 
+// ─────────────────────────────────────────────
+// Parâmetros e abas
+// ─────────────────────────────────────────────
+
 function params() {
   const p = new URLSearchParams();
-  const add = (k, id) => { const v = document.getElementById(id).value; if(v) p.append(k, v); };
-  add("gerencia","f-gerencia"); add("polo","f-polo");
-  add("cidade","f-cidade"); add("sistema","f-sistema");
-  add("data_ini","f-data-ini"); add("data_fim","f-data-fim");
+
+  const add = (k, id) => {
+    const v = document.getElementById(id).value;
+    if (v) p.append(k, v);
+  };
+
+  add("gerencia", "f-gerencia");
+  add("polo", "f-polo");
+  add("cidade", "f-cidade");
+  add("sistema", "f-sistema");
+  add("data_ini", "f-data-ini");
+  add("data_fim", "f-data-fim");
+
   return p.toString() ? "?" + p.toString() : "";
 }
 
 function aplicarFiltros() {
-  if (abaAtiva === "producao")     carregarProducao();
+  if (abaAtiva === "producao") carregarProducao();
   if (abaAtiva === "acompanhamento") carregarAcompanhamento();
-  if (abaAtiva === "qualidade")    carregarQualidade();
-  if (abaAtiva === "leituras")     carregarLeituras();
+  if (abaAtiva === "qualidade") carregarQualidade();
+  if (abaAtiva === "leituras") carregarLeituras();
 }
 
 function limparFiltros() {
-  ["f-gerencia","f-polo","f-cidade","f-sistema","f-data-ini","f-data-fim"]
-    .forEach(id => { const el = document.getElementById(id); el.value=""; });
-  
-  atualizarCascata('gerencia');
+  [
+    "f-gerencia",
+    "f-polo",
+    "f-cidade",
+    "f-sistema",
+    "f-data-ini",
+    "f-data-fim"
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = "";
+  });
+
+  preencherSelect("f-gerencia", [...new Set(combinacoesFiltros.map(x => x["Gerência"]).filter(Boolean))]);
+  preencherSelect("f-polo", [...new Set(combinacoesFiltros.map(x => x["Pólo"]).filter(Boolean))]);
+  preencherSelect("f-cidade", [...new Set(combinacoesFiltros.map(x => x["Cidade"]).filter(Boolean))]);
+  preencherSelect("f-sistema", [...new Set(combinacoesFiltros.map(x => x["Sistema"]).filter(Boolean))]);
+
   aplicarFiltros();
 }
 
 function mudarAba(nome, el) {
   abaAtiva = nome;
+
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
   document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+
   el.classList.add("active");
   document.getElementById("aba-" + nome).classList.add("active");
-  if (nome === "producao")      carregarProducao();
+
+  if (nome === "producao") carregarProducao();
   if (nome === "acompanhamento") carregarAcompanhamento();
-  if (nome === "qualidade")     carregarQualidade();
-  if (nome === "leituras")      carregarLeituras();
+  if (nome === "qualidade") carregarQualidade();
+  if (nome === "leituras") carregarLeituras();
 }
 
-// ── Produção ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Produção
+// ─────────────────────────────────────────────
+
 async function carregarProducao() {
-  const r = await fetch(`${API}/producao${params()}`);
-  const d = await r.json();
-  const rows = d.rows || [];
-
-  const tot = rows.reduce((a, r) => { a.prod += r.producao||0; a.n++; return a; }, {prod:0, n:0});
-  const avgVazao = rows.filter(r=>r.vazao_m3h).reduce((a,r,_,arr)=>a+r.vazao_m3h/arr.filter(x=>x.vazao_m3h).length, 0);
-
-  document.getElementById("cards-producao").innerHTML = `
-    <div class="card c-blue">
-      <div class="label">Produção Total</div>
-      <div class="value">${fmt(tot.prod)}</div>
-      <div class="sub">m³</div>
-    </div>
-    <div class="card c-green">
-      <div class="label">Sistemas</div>
-      <div class="value">${tot.n}</div>
-      <div class="sub">com leitura</div>
-    </div>
-    <div class="card c-yellow">
-      <div class="label">Vazão Média</div>
-      <div class="value">${fmt2(avgVazao)}</div>
-      <div class="sub">m³/h</div>
-    </div>
-    <div class="card c-teal">
-      <div class="label">Média Diária</div>
-      <div class="value">${fmt2(rows.reduce((a,r)=>r.media_dia?a+r.media_dia:a,0)/rows.filter(r=>r.media_dia).length||0)}</div>
-      <div class="sub">m³/dia</div>
-    </div>`;
-
-  document.getElementById("count-producao").textContent = `${rows.length} sistemas`;
+  const cards = document.getElementById("cards-producao");
   const tbody = document.querySelector("#tbl-producao tbody");
-  tbody.innerHTML = rows.map(r => `
-    <tr>
-      <td>${r.gerencia||""}</td>
-      <td>${r.polo||""}</td>
-      <td>${r.cidade||""}</td>
-      <td>${r.sistema||""}</td>
-      <td>${fmt(r.producao)}</td>
-      <td>${r.media_dia ? fmt2(r.media_dia) : "—"}</td>
-      <td>${r.projecao_mensal ? fmt(r.projecao_mensal) : "—"}</td>
-      <td>${r.vazao_m3h ? fmt2(r.vazao_m3h) : "—"}</td>
-      <td>${r.vazao_ls ? fmt4(r.vazao_ls) : "—"}</td>
-      <td>${r.horas ? fmt2(r.horas) : "—"}</td>
-    </tr>`).join("");
+
+  cards.innerHTML = `<div class="loading"><span class="spinner"></span>Carregando produção…</div>`;
+  tbody.innerHTML = "";
+
+  try {
+    const r = await fetch(`${API}/producao${params()}`);
+    const d = await r.json();
+
+    let rows = d.rows || [];
+
+    rows = calcularCamposProducao(rows);
+
+    const totais = rows.reduce((a, r) => {
+      a.producaoMes += num(r.producao_mes);
+      a.mediaDia += num(r.media_dia);
+      a.vazaoM3h += num(r.vazao_m3h);
+      a.vazaoLs += num(r.vazao_ls);
+      a.horasDia += num(r.horas_dia);
+      a.horasMes += num(r.horas_mes);
+      return a;
+    }, {
+      producaoMes: 0,
+      mediaDia: 0,
+      vazaoM3h: 0,
+      vazaoLs: 0,
+      horasDia: 0,
+      horasMes: 0
+    });
+
+    cards.innerHTML = `
+      <div class="card c-blue">
+        <div class="label">Produção Mês</div>
+        <div class="value">${fmt(totais.producaoMes)}</div>
+        <div class="sub">m³ projetado</div>
+      </div>
+
+      <div class="card c-green">
+        <div class="label">Média Diária</div>
+        <div class="value">${fmt(totais.mediaDia)}</div>
+        <div class="sub">m³/dia</div>
+      </div>
+
+      <div class="card c-yellow">
+        <div class="label">Vazão Média</div>
+        <div class="value">${fmt2(totais.vazaoM3h)}</div>
+        <div class="sub">m³/h</div>
+      </div>
+
+      <div class="card c-teal">
+        <div class="label">Vazão Média</div>
+        <div class="value">${fmt4(totais.vazaoLs)}</div>
+        <div class="sub">L/s</div>
+      </div>
+
+      <div class="card c-purple">
+        <div class="label">Horas Média Dia</div>
+        <div class="value">${fmt2(totais.horasDia)}</div>
+        <div class="sub">H/D</div>
+      </div>
+
+      <div class="card c-red">
+        <div class="label">Projeção Horas Mês</div>
+        <div class="value">${fmt2(totais.horasMes)}</div>
+        <div class="sub">horas totais mês</div>
+      </div>
+    `;
+
+    document.getElementById("count-producao").textContent =
+      `${rows.length} sistemas`;
+
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.gerencia || "")}</td>
+        <td>${escapeHtml(r.polo || "")}</td>
+        <td>${escapeHtml(r.cidade || "")}</td>
+        <td>${escapeHtml(r.sistema || "")}</td>
+        <td>${r.producao != null ? fmt(r.producao) : "—"}</td>
+        <td>${r.media_dia != null ? fmt2(r.media_dia) : "—"}</td>
+        <td>${r.producao_mes != null ? fmt(r.producao_mes) : "—"}</td>
+        <td>${r.vazao_ls != null ? fmt4(r.vazao_ls) : "—"}</td>
+        <td>${r.horas_dia != null ? fmt2(r.horas_dia) : "—"}</td>
+        <td>${r.horas_mes != null ? fmt2(r.horas_mes) : "—"}</td>
+      </tr>
+    `).join("");
+
+  } catch (e) {
+    console.error("Erro ao carregar produção:", e);
+
+    cards.innerHTML = `
+      <div class="card c-red">
+        <div class="label">Erro</div>
+        <div class="value">Falha</div>
+        <div class="sub">Não foi possível carregar produção</div>
+      </div>
+    `;
+
+    document.getElementById("count-producao").textContent = "Erro ao carregar";
+  }
 }
 
-// ── Acompanhamento ────────────────────────────────────────────────────────────
+function calcularCamposProducao(rows) {
+  const diasMes = diasNoMesReferencia();
+
+  return rows.map(r => {
+    const producao = numNull(r.producao);
+    const mediaDia = numNull(r.media_dia);
+    const horas = numNull(r.horas);
+    const vazaoM3h = numNull(r.vazao_m3h);
+    const vazaoLs = numNull(r.vazao_ls) ?? (
+      vazaoM3h != null ? vazaoM3h * 1000 / 3600 : null
+    );
+
+    const producaoMes = numNull(r.projecao_mensal) ?? (
+      mediaDia != null ? mediaDia * diasMes : null
+    );
+
+    let diasIntervalo = null;
+
+    if (
+      producao != null &&
+      mediaDia != null &&
+      mediaDia > 0
+    ) {
+      diasIntervalo = producao / mediaDia;
+    }
+
+    let horasDia = null;
+
+    if (
+      horas != null &&
+      diasIntervalo != null &&
+      diasIntervalo > 0
+    ) {
+      horasDia = horas / diasIntervalo;
+    }
+
+    const horasMes = horasDia != null ? horasDia * diasMes : null;
+
+    return {
+      ...r,
+      producao_mes: producaoMes,
+      vazao_ls: vazaoLs,
+      horas_dia: horasDia,
+      horas_mes: horasMes
+    };
+  });
+}
+
+function diasNoMesReferencia() {
+  const dataFim = document.getElementById("f-data-fim").value;
+  const dataIni = document.getElementById("f-data-ini").value;
+
+  const base = dataFim || dataIni;
+
+  let data;
+
+  if (base) {
+    const partes = base.split("-");
+    const ano = Number(partes[0]);
+    const mes = Number(partes[1]);
+    data = new Date(ano, mes - 1, 1);
+  } else {
+    data = new Date();
+  }
+
+  return new Date(data.getFullYear(), data.getMonth() + 1, 0).getDate();
+}
+
+// ─────────────────────────────────────────────
+// Acompanhamento
+// ─────────────────────────────────────────────
+
 async function carregarAcompanhamento() {
-  const r = await fetch(`${API}/acompanhamento${params()}`);
-  const d = await r.json();
-  const rows = d.rows || [];
+  try {
+    const r = await fetch(`${API}/acompanhamento${params()}`);
+    const d = await r.json();
+    const rows = d.rows || [];
 
-  document.getElementById("count-acomp").textContent = `${rows.length} sistemas`;
-  const tbody = document.querySelector("#tbl-acomp tbody");
-  tbody.innerHTML = rows.map(row => {
-    const rankClass = row.rank === 1 ? "rank-1" : row.rank <= 5 ? "rank-2" : "rank-ok";
-    const status = row.analises === 0
-      ? `<span class="badge badge-red">Sem análise</span>`
-      : row.analises < 3
-      ? `<span class="badge badge-yellow">Poucas análises</span>`
-      : `<span class="badge badge-green">Regular</span>`;
-    return `<tr>
-      <td class="${rankClass}">#${row.rank}</td>
-      <td>${row.gerencia||""}</td>
-      <td>${row.polo||""}</td>
-      <td>${row.cidade||""}</td>
-      <td>${row.sistema||""}</td>
-      <td>${row.analises}</td>
-      <td>${row.leituras}</td>
-      <td>${status}</td>
-    </tr>`;
-  }).join("");
+    document.getElementById("count-acomp").textContent =
+      `${rows.length} sistemas`;
+
+    const tbody = document.querySelector("#tbl-acomp tbody");
+
+    tbody.innerHTML = rows.map(row => {
+      const rankClass =
+        row.rank === 1
+          ? "rank-1"
+          : row.rank <= 5
+          ? "rank-2"
+          : "rank-ok";
+
+      const status =
+        row.analises === 0
+          ? `<span class="badge badge-red">Sem análise</span>`
+          : row.analises < 3
+          ? `<span class="badge badge-yellow">Poucas análises</span>`
+          : `<span class="badge badge-green">Regular</span>`;
+
+      return `
+        <tr>
+          <td class="${rankClass}">#${row.rank}</td>
+          <td>${escapeHtml(row.gerencia || "")}</td>
+          <td>${escapeHtml(row.polo || "")}</td>
+          <td>${escapeHtml(row.cidade || "")}</td>
+          <td>${escapeHtml(row.sistema || "")}</td>
+          <td>${row.analises ?? 0}</td>
+          <td>${row.leituras ?? 0}</td>
+          <td>${status}</td>
+        </tr>
+      `;
+    }).join("");
+
+  } catch (e) {
+    console.error("Erro ao carregar acompanhamento:", e);
+  }
 }
 
-// ── Qualidade ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Qualidade
+// ─────────────────────────────────────────────
+
 async function carregarQualidade() {
-  const r = await fetch(`${API}/qualidade${params()}`);
-  const d = await r.json();
+  try {
+    const r = await fetch(`${API}/qualidade${params()}`);
+    const d = await r.json();
 
-  const params_q = [
-    { key: "cloro",    label: "Cloro Residual Livre",  unidade: "mg/L", limite: "≤ 5,0",  cor: "#3b82f6" },
-    { key: "turbidez", label: "Turbidez",               unidade: "uT",   limite: "≤ 1,0",  cor: "#8b5cf6" },
-    { key: "cor",      label: "Cor Aparente",           unidade: "uH",   limite: "≤ 15",   cor: "#f59e0b" },
-    { key: "fluoreto", label: "Fluoreto",               unidade: "mg/L", limite: "≤ 1,5",  cor: "#14b8a6" },
-  ];
+    const params_q = [
+      {
+        key: "cloro",
+        label: "Cloro Residual Livre",
+        unidade: "mg/L",
+        limite: "≤ 5,0",
+        cor: "#3b82f6"
+      },
+      {
+        key: "turbidez",
+        label: "Turbidez",
+        unidade: "uT",
+        limite: "≤ 1,0",
+        cor: "#8b5cf6"
+      },
+      {
+        key: "cor",
+        label: "Cor Aparente",
+        unidade: "uH",
+        limite: "≤ 15",
+        cor: "#f59e0b"
+      },
+      {
+        key: "fluoreto",
+        label: "Fluoreto",
+        unidade: "mg/L",
+        limite: "≤ 1,5",
+        cor: "#14b8a6"
+      }
+    ];
 
-  document.getElementById("qual-grid").innerHTML = params_q.map(p => {
-    const q = d[p.key] || {};
-    const total = q.total || 0;
-    const adeq  = q.adequado || 0;
-    const inad  = q.inadequado || 0;
-    const pct   = total > 0 ? Math.round(adeq / total * 100) : 0;
-    return `
-    <div class="qual-card">
-      <h3>${p.label} <span style="color:var(--muted);font-weight:400;font-size:11px">(${p.limite} ${p.unidade})</span></h3>
-      <div style="font-size:28px;font-weight:700;color:${pct>=80?"var(--green)":pct>=60?"var(--yellow)":"var(--red)"}">${pct}%</div>
-      <div class="qual-bar"><div class="qual-bar-fill" style="width:${pct}%;background:${p.cor}"></div></div>
-      <div class="qual-row"><span>Adequado: ${adeq}</span><span>Inadequado: ${inad}</span><span>Total: ${total}</span></div>
-      ${p.key==="cloro" && q.abaixo_min ? `<div style="font-size:11px;color:var(--red);margin-top:6px">⚠ ${q.abaixo_min} abaixo do mínimo (< 0,2 mg/L)</div>` : ""}
-    </div>`;
-  }).join("");
+    document.getElementById("qual-grid").innerHTML = params_q.map(p => {
+      const q = d[p.key] || {};
+      const total = q.total || 0;
+      const adeq = q.adequado || 0;
+      const inad = q.inadequado || 0;
+      const pct = total > 0 ? Math.round(adeq / total * 100) : 0;
+
+      return `
+        <div class="qual-card">
+          <h3>
+            ${p.label}
+            <span style="color:var(--muted);font-weight:400;font-size:11px">
+              (${p.limite} ${p.unidade})
+            </span>
+          </h3>
+
+          <div style="font-size:28px;font-weight:700;color:${pct >= 80 ? "var(--green)" : pct >= 60 ? "var(--yellow)" : "var(--red)"}">
+            ${pct}%
+          </div>
+
+          <div class="qual-bar">
+            <div class="qual-bar-fill" style="width:${pct}%;background:${p.cor}"></div>
+          </div>
+
+          <div class="qual-row">
+            <span>Adequado: ${adeq}</span>
+            <span>Inadequado: ${inad}</span>
+            <span>Total: ${total}</span>
+          </div>
+
+          ${
+            p.key === "cloro" && q.abaixo_min
+              ? `<div style="font-size:11px;color:var(--red);margin-top:6px">
+                   ⚠ ${q.abaixo_min} abaixo do mínimo (&lt; 0,2 mg/L)
+                 </div>`
+              : ""
+          }
+        </div>
+      `;
+    }).join("");
+
+  } catch (e) {
+    console.error("Erro ao carregar qualidade:", e);
+  }
 }
 
-// ── Leituras ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Leituras
+// ─────────────────────────────────────────────
+
 async function carregarLeituras() {
-  const p = new URLSearchParams();
-  const add = (k, id) => { const v = document.getElementById(id)?.value; if(v) p.append(k, v); };
-  add("cidade","f-cidade"); add("sistema","f-sistema");
-  add("data_ini","f-data-ini"); add("data_fim","f-data-fim");
-  if (document.getElementById("f-so-analise").checked) p.append("apenas_analise","true");
-  if (document.getElementById("f-so-leitura").checked) p.append("apenas_leitura","true");
+  try {
+    const p = new URLSearchParams();
 
-  const r = await fetch(`${API}/leituras?${p}`);
-  const d = await r.json();
-  const rows = d.rows || [];
+    const add = (k, id) => {
+      const v = document.getElementById(id)?.value;
+      if (v) p.append(k, v);
+    };
 
-  document.getElementById("count-leit").textContent = `${rows.length} registros`;
-  const tbody = document.querySelector("#tbl-leit tbody");
-  tbody.innerHTML = rows.map(row => {
-    const tipo = row.Tem_Analise && row.Tem_Leitura_Macro
-      ? `<span class="badge badge-blue">Ambos</span>`
-      : row.Tem_Analise
-      ? `<span class="badge badge-green">Análise</span>`
-      : `<span class="badge badge-yellow">Leitura</span>`;
-    return `<tr>
-      <td style="white-space:nowrap">${row.Data_Hora_Exibicao||""}</td>
-      <td>${row.Cidade||""}</td>
-      <td>${row.Sistema||""}</td>
-      <td>${row.ME_Num!=null?fmt(row.ME_Num):"—"}</td>
-      <td>${row.MS_Num!=null?fmt(row.MS_Num):"—"}</td>
-      <td>${row.Horimetro_Num!=null?fmt(row.Horimetro_Num):"—"}</td>
-      <td>${row["Cloro (mg/L)"]!=null?row["Cloro (mg/L)"]:"—"}</td>
-      <td>${row["Turbidez (uT)"]!=null?row["Turbidez (uT)"]:"—"}</td>
-      <td>${row["Cor (uH)"]!=null?row["Cor (uH)"]:"—"}</td>
-      <td>${row["Fluoreto (mg/L)"]!=null?row["Fluoreto (mg/L)"]:"—"}</td>
-      <td>${row.Producao!=null?fmt(row.Producao):"—"}</td>
-      <td>${tipo}</td>
-    </tr>`;
-  }).join("");
+    add("cidade", "f-cidade");
+    add("sistema", "f-sistema");
+    add("data_ini", "f-data-ini");
+    add("data_fim", "f-data-fim");
+
+    if (document.getElementById("f-so-analise").checked) {
+      p.append("apenas_analise", "true");
+    }
+
+    if (document.getElementById("f-so-leitura").checked) {
+      p.append("apenas_leitura", "true");
+    }
+
+    const query = p.toString() ? `?${p.toString()}` : "";
+    const r = await fetch(`${API}/leituras${query}`);
+    const d = await r.json();
+
+    const rows = d.rows || [];
+
+    document.getElementById("count-leit").textContent =
+      `${rows.length} registros`;
+
+    const tbody = document.querySelector("#tbl-leit tbody");
+
+    tbody.innerHTML = rows.map(row => {
+      const tipo =
+        row.Tem_Analise && row.Tem_Leitura_Macro
+          ? `<span class="badge badge-blue">Ambos</span>`
+          : row.Tem_Analise
+          ? `<span class="badge badge-green">Análise</span>`
+          : `<span class="badge badge-yellow">Leitura</span>`;
+
+      return `
+        <tr>
+          <td>${escapeHtml(row.Data_Hora_Exibicao || "")}</td>
+          <td>${escapeHtml(row.Cidade || "")}</td>
+          <td>${escapeHtml(row.Sistema || "")}</td>
+          <td>${row.ME_Num != null ? fmt(row.ME_Num) : "—"}</td>
+          <td>${row.MS_Num != null ? fmt(row.MS_Num) : "—"}</td>
+          <td>${row.Horimetro_Num != null ? fmt(row.Horimetro_Num) : "—"}</td>
+          <td>${row["Cloro (mg/L)"] != null ? row["Cloro (mg/L)"] : "—"}</td>
+          <td>${row["Turbidez (uT)"] != null ? row["Turbidez (uT)"] : "—"}</td>
+          <td>${row["Cor (uH)"] != null ? row["Cor (uH)"] : "—"}</td>
+          <td>${row["Fluoreto (mg/L)"] != null ? row["Fluoreto (mg/L)"] : "—"}</td>
+          <td>${row.Producao != null ? fmt(row.Producao) : "—"}</td>
+          <td>${tipo}</td>
+        </tr>
+      `;
+    }).join("");
+
+  } catch (e) {
+    console.error("Erro ao carregar leituras:", e);
+  }
 }
 
-// ── Utilitários ───────────────────────────────────────────────────────────────
-const fmt  = v => v != null ? Number(v).toLocaleString("pt-BR", {maximumFractionDigits:0}) : "—";
-const fmt2 = v => v != null ? Number(v).toLocaleString("pt-BR", {minimumFractionDigits:2,maximumFractionDigits:2}) : "—";
-const fmt4 = v => v != null ? Number(v).toLocaleString("pt-BR", {minimumFractionDigits:4,maximumFractionDigits:4}) : "—";
+// ─────────────────────────────────────────────
+// Utilitários
+// ─────────────────────────────────────────────
+
+function num(v) {
+  if (v === null || v === undefined || v === "" || Number.isNaN(Number(v))) {
+    return 0;
+  }
+
+  return Number(v);
+}
+
+function numNull(v) {
+  if (v === null || v === undefined || v === "" || Number.isNaN(Number(v))) {
+    return null;
+  }
+
+  return Number(v);
+}
+
+const fmt = v =>
+  v != null
+    ? Number(v).toLocaleString("pt-BR", {
+        maximumFractionDigits: 0
+      })
+    : "—";
+
+const fmt2 = v =>
+  v != null
+    ? Number(v).toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })
+    : "—";
+
+const fmt4 = v =>
+  v != null
+    ? Number(v).toLocaleString("pt-BR", {
+        minimumFractionDigits: 4,
+        maximumFractionDigits: 4
+      })
+    : "—";
+
+function escapeHtml(valor) {
+  return String(valor)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
 function filtrarTabela(tblId, q) {
   const tbl = document.getElementById(tblId);
   const rows = tbl.querySelectorAll("tbody tr");
   const lq = q.toLowerCase();
+
   rows.forEach(r => {
     r.style.display = r.textContent.toLowerCase().includes(lq) ? "" : "none";
   });
 }
 
 let sortDir = {};
+
 function sortTable(tblId, col) {
   const tbl = document.getElementById(tblId);
   const tbody = tbl.querySelector("tbody");
   const rows = Array.from(tbody.querySelectorAll("tr"));
-  sortDir[tblId+col] = !sortDir[tblId+col];
-  const asc = sortDir[tblId+col];
+
+  sortDir[tblId + col] = !sortDir[tblId + col];
+
+  const asc = sortDir[tblId + col];
+
   rows.sort((a, b) => {
     const va = a.cells[col]?.textContent.trim() || "";
     const vb = b.cells[col]?.textContent.trim() || "";
-    const na = parseFloat(va.replace(/\./g,"").replace(",","."));
-    const nb = parseFloat(vb.replace(/\./g,"").replace(",","."));
-    if (!isNaN(na) && !isNaN(nb)) return asc ? na-nb : nb-na;
-    return asc ? va.localeCompare(vb,"pt-BR") : vb.localeCompare(va,"pt-BR");
+
+    const na = parseFloat(
+      va
+        .replace(/\./g, "")
+        .replace(",", ".")
+        .replace(/[^\d.-]/g, "")
+    );
+
+    const nb = parseFloat(
+      vb
+        .replace(/\./g, "")
+        .replace(",", ".")
+        .replace(/[^\d.-]/g, "")
+    );
+
+    if (!isNaN(na) && !isNaN(nb)) {
+      return asc ? na - nb : nb - na;
+    }
+
+    return asc
+      ? va.localeCompare(vb, "pt-BR")
+      : vb.localeCompare(va, "pt-BR");
   });
+
   rows.forEach(r => tbody.appendChild(r));
 }
 
 init();
 </script>
+
 </body>
 </html>
-
