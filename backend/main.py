@@ -56,24 +56,14 @@ def valor_json_seguro(valor):
 
 
 def dict_json_seguro(d):
-    """
-    Aplica a conversão segura em um dicionário.
-    """
     return {k: valor_json_seguro(v) for k, v in d.items()}
 
 
 def lista_json_segura(lista):
-    """
-    Aplica a conversão segura em uma lista de dicionários.
-    """
     return [dict_json_seguro(item) for item in lista]
 
 
 def arredondar_seguro(valor, casas=2):
-    """
-    Arredonda somente se o valor for válido.
-    Retorna float nativo do Python.
-    """
     if valor is None:
         return None
 
@@ -229,7 +219,6 @@ def filtros():
             df[col] = ""
 
     comb = df[cols].drop_duplicates().astype(object).fillna("")
-
     combinacoes = comb.to_dict(orient="records")
 
     return {
@@ -283,10 +272,6 @@ def producao(
 
     for (ger, pol, cid, sis), g in grp:
         g = g.copy()
-
-        if "Data_Hora" not in g.columns:
-            continue
-
         g = g.dropna(subset=["Data_Hora"])
 
         if g.empty:
@@ -294,15 +279,32 @@ def producao(
 
         g = g.sort_values("Data_Hora")
 
-        if "Tem_Leitura_Macro" not in g.columns:
-            continue
+        # =========================================================
+        # REGRA PRINCIPAL
+        # =========================================================
+        # Produção usa SOMENTE linhas com leitura de macro.
+        # Linha apenas com análise não entra em:
+        # - produção
+        # - média diária
+        # - vazão
+        # - horímetro
+        # - projeção mensal
+        #
+        # Linha com leitura entra, mesmo que não tenha análise.
+        # Linha com análise + leitura entra normalmente.
 
-        leit = g[g["Tem_Leitura_Macro"] == True].dropna(subset=["Data_Hora"])
+        leit = g[g["Tem_Leitura_Macro"] == True].copy()
+        leit = leit.dropna(subset=["Data_Hora"])
 
         if leit.empty:
             continue
 
-        # Escolhe coluna de macro
+        leit = leit.sort_values("Data_Hora")
+
+        # =========================================================
+        # ESCOLHA DO MACRO PARA EXTREMOS
+        # =========================================================
+
         col_macro = None
 
         if "MS_Num" in leit.columns and leit["MS_Num"].notna().any():
@@ -318,6 +320,8 @@ def producao(
         if leit_macro.empty:
             continue
 
+        leit_macro = leit_macro.sort_values("Data_Hora")
+
         primeira = leit_macro.iloc[0]
         ultima = leit_macro.iloc[-1]
 
@@ -327,53 +331,87 @@ def producao(
         val_ini = valor_json_seguro(primeira[col_macro])
         val_fim = valor_json_seguro(ultima[col_macro])
 
-        prod = None
-        horas = None
-        dias = None
-        media_dia = None
-
         try:
             val_ini = float(val_ini)
             val_fim = float(val_fim)
         except Exception:
-            continue
+            val_ini = None
+            val_fim = None
 
-        # REGRA PRINCIPAL: produção pelos extremos de macro
-        if dt_fim > dt_ini and val_fim >= val_ini:
-            prod = val_fim - val_ini
-            horas = (dt_fim - dt_ini).total_seconds() / 3600
-            dias = horas / 24.0
-            media_dia = prod / dias if dias > 0 else None
+        # =========================================================
+        # PRODUÇÃO BRUTA PELO MACRO
+        # =========================================================
+        # Apenas para conferência.
+        # Não é a produção final quando existir coluna Producao.
 
-        else:
-            # Fallback se hidrômetro foi trocado ou datas iguais
-            if "Producao" in g.columns:
-                prod = g["Producao"].sum()
-            else:
-                prod = 0
+        prod_bruta_macro = None
 
-            prod = valor_json_seguro(prod)
+        if (
+            val_ini is not None
+            and val_fim is not None
+            and dt_fim > dt_ini
+            and val_fim >= val_ini
+        ):
+            prod_bruta_macro = val_fim - val_ini
 
-            if prod is None:
-                prod = 0
+        # =========================================================
+        # PRODUÇÃO AJUSTADA COM PARTICULARIDADES
+        # =========================================================
+        # Prioridade:
+        # 1. Somar a coluna Producao SOMENTE nas linhas com leitura.
+        #    Esta coluna deve vir do ETL já com particularidades descontadas.
+        #
+        # 2. Se não existir Producao ou estiver vazia, usa diferença bruta
+        #    do macro como fallback.
 
-            try:
-                horas = (
-                    leit["Data_Hora"].max() - leit["Data_Hora"].min()
-                ).total_seconds() / 3600
-            except Exception:
-                horas = None
+        prod = None
 
-            dias = horas / 24.0 if horas and horas > 0 else None
-            media_dia = prod / dias if dias and dias > 0 else None
+        if "Producao" in leit.columns:
+            serie_prod = pd.to_numeric(leit["Producao"], errors="coerce").dropna()
 
-        # Diferença de horímetro
+            if not serie_prod.empty:
+                prod = float(serie_prod.sum())
+
+        if prod is None:
+            prod = prod_bruta_macro
+
+        if prod is None:
+            prod = 0
+
+        # =========================================================
+        # TEMPO DO PERÍODO PARA MÉDIA DIÁRIA
+        # =========================================================
+        # Usa primeira e última leitura real, não linha apenas de análise.
+
+        horas_periodo = None
+        dias = None
+        media_dia = None
+
+        try:
+            if dt_fim > dt_ini:
+                horas_periodo = (dt_fim - dt_ini).total_seconds() / 3600
+                dias = horas_periodo / 24.0
+
+                if dias > 0:
+                    media_dia = prod / dias
+        except Exception:
+            horas_periodo = None
+            dias = None
+            media_dia = None
+
+        # =========================================================
+        # DIFERENÇA DE HORÍMETRO
+        # =========================================================
+        # Usa somente linhas com leitura de macro.
+
         dif_hor = None
 
         if "Horimetro_Num" in leit.columns:
             leit_hor = leit.dropna(subset=["Horimetro_Num"]).copy()
 
             if not leit_hor.empty:
+                leit_hor = leit_hor.sort_values("Data_Hora")
+
                 try:
                     hor_ini = float(valor_json_seguro(leit_hor.iloc[0]["Horimetro_Num"]))
                     hor_fim = float(valor_json_seguro(leit_hor.iloc[-1]["Horimetro_Num"]))
@@ -383,24 +421,33 @@ def producao(
                 except Exception:
                     dif_hor = None
 
-        # Projeção mensal
+        # =========================================================
+        # PROJEÇÃO MENSAL
+        # =========================================================
+        # Usa produção já ajustada e dias do mês da última leitura.
+
         projecao_mensal = None
 
         try:
-            if media_dia and pd.notna(ultima["Data_Hora"]):
+            if media_dia is not None and pd.notna(ultima["Data_Hora"]):
                 _, dias_no_mes = calendar.monthrange(
                     ultima["Data_Hora"].year,
                     ultima["Data_Hora"].month,
                 )
+
                 projecao_mensal = media_dia * dias_no_mes
         except Exception:
             projecao_mensal = None
 
-        # Vazão
+        # =========================================================
+        # VAZÃO PELO HORÍMETRO
+        # =========================================================
+        # Usa produção ajustada / diferença de horímetro.
+
         vazao_m3h = None
         vazao_ls = None
 
-        if dif_hor and dif_hor > 0:
+        if dif_hor is not None and dif_hor > 0:
             try:
                 vazao_m3h = prod / dif_hor
                 vazao_ls = vazao_m3h * 1000 / 3600
@@ -413,12 +460,28 @@ def producao(
             "polo": str(valor_json_seguro(pol)),
             "cidade": str(valor_json_seguro(cid)),
             "sistema": str(valor_json_seguro(sis)),
+
+            # Produção final já considerando particularidades
+            # e ignorando linhas apenas com análise.
             "producao": arredondar_seguro(prod, 2),
+
+            # Conferência: diferença pura do macro.
+            "producao_bruta_macro": arredondar_seguro(prod_bruta_macro, 2),
+
+            # Média e projeção usando produção ajustada.
             "media_dia": arredondar_seguro(media_dia, 2),
             "projecao_mensal": arredondar_seguro(projecao_mensal, 2),
+
+            # Vazão usando produção ajustada / horímetro.
             "vazao_m3h": arredondar_seguro(vazao_m3h, 2),
             "vazao_ls": arredondar_seguro(vazao_ls, 4),
-            "horas": arredondar_seguro(horas, 2),
+
+            # Tempo corrido entre primeira e última leitura de macro.
+            "horas": arredondar_seguro(horas_periodo, 2),
+
+            # Diferença real do horímetro.
+            # O frontend usa isto para H/D.
+            "horimetro_horas": arredondar_seguro(dif_hor, 2),
         }
 
         rows.append(dict_json_seguro(linha))
@@ -618,7 +681,6 @@ def leituras(
     cols = [c for c in cols if c in df.columns]
 
     df = df[cols].copy()
-
     df = df.replace({np.nan: None})
 
     if "Data_Hora_Exibicao" in df.columns:
@@ -634,4 +696,4 @@ def leituras(
     return {
         "rows": rows,
         "total": len(rows),
-        }
+    }
