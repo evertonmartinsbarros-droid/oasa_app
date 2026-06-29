@@ -119,7 +119,22 @@ def producao(
         hor_fim = leit.loc[leit["Data_Hora"] == dt_fim, "Horimetro_Num"].max()
         dif_hor = (hor_fim - hor_ini) if pd.notna(hor_ini) and pd.notna(hor_fim) and hor_fim >= hor_ini else None
 
-        prod = g["Producao"].sum()
+       # Encontra os hidrômetros exatos dos extremos para o cálculo real
+        # Prioriza o Macro Saída (MS_Num), se não houver, tenta o Macro Entrada (ME_Num)
+        if not leit.empty:
+            col_macro = "MS_Num" if leit["MS_Num"].notna().any() else "ME_Num"
+            
+            # Pega o valor do hidrômetro na última e na primeira leitura do período
+            val_fim = leit.loc[leit["Data_Hora"] == dt_fim, col_macro].max()
+            val_ini = leit.loc[leit["Data_Hora"] == dt_ini, col_macro].min()
+            
+            if pd.notna(val_fim) and pd.notna(val_ini) and val_fim >= val_ini:
+                prod = val_fim - val_ini
+            else:
+                prod = g["Producao"].sum() # Fallback caso falte o hidrômetro nos extremos
+        else:
+            prod = 0
+            
         if pd.isna(prod):
             prod = 0
 
