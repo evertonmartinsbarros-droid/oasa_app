@@ -5,6 +5,7 @@ from typing import Optional
 import asyncio
 import os
 import math
+import calendar
 
 import pandas as pd
 import numpy as np
@@ -74,7 +75,13 @@ def status():
 @app.get("/filtros")
 def filtros():
     df = get_df_seguro()
+    
+    # Extrai as combinações únicas para a cascata no frontend
+    cols = ["Gerência", "Pólo", "Cidade", "Sistema"]
+    comb = df[cols].drop_duplicates().fillna("")
+
     return {
+        "combinacoes": comb.to_dict(orient="records"),
         "gerencias": sorted(df["Gerência"].dropna().unique().tolist()),
         "polos":     sorted(df["Pólo"].dropna().unique().tolist()),
         "cidades":   sorted(df["Cidade"].dropna().unique().tolist()),
@@ -116,6 +123,13 @@ def producao(
 
         dias = horas / 24 if horas else None
         media_dia = prod / dias if dias and dias > 0 else None
+
+        # Projeção Mensal
+        projecao_mensal = None
+        if media_dia and pd.notna(dt_fim):
+            _, dias_no_mes = calendar.monthrange(dt_fim.year, dt_fim.month)
+            projecao_mensal = media_dia * dias_no_mes
+
         vazao_m3h = prod / dif_hor if dif_hor and dif_hor > 0 else None
         vazao_ls  = vazao_m3h * 1000 / 3600 if vazao_m3h else None
 
@@ -123,6 +137,7 @@ def producao(
             "gerencia": ger, "polo": pol, "cidade": cid, "sistema": sis,
             "producao":  round(prod, 2),
             "media_dia": round(media_dia, 2) if media_dia else None,
+            "projecao_mensal": round(projecao_mensal, 2) if projecao_mensal else None,
             "vazao_m3h": round(vazao_m3h, 2) if vazao_m3h else None,
             "vazao_ls":  round(vazao_ls, 4)  if vazao_ls  else None,
             "horas":     round(horas, 2)     if horas     else None,
