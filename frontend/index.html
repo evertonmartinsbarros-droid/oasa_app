@@ -217,12 +217,12 @@
     border-top: 3px solid var(--teal);
   }
 
-  .c-red {
-    border-top: 3px solid var(--red);
-  }
-
   .c-purple {
     border-top: 3px solid var(--purple);
+  }
+
+  .c-red {
+    border-top: 3px solid var(--red);
   }
 
   .table-wrap {
@@ -346,8 +346,10 @@
   .qual-row {
     display: flex;
     justify-content: space-between;
+    gap: 8px;
     font-size: 12px;
     color: var(--muted);
+    flex-wrap: wrap;
   }
 
   .loading {
@@ -393,11 +395,60 @@
     justify-content: space-between;
     align-items: center;
     padding: 12px 16px;
+    gap: 12px;
   }
 
   .table-count {
     font-size: 12px;
     color: var(--muted);
+  }
+
+  @media (max-width: 768px) {
+    header {
+      padding: 12px 14px;
+      flex-wrap: wrap;
+    }
+
+    header span {
+      margin-left: 0;
+      width: 100%;
+    }
+
+    .container {
+      padding: 14px;
+    }
+
+    .filtros {
+      gap: 10px;
+    }
+
+    .filtros label,
+    .filtros select,
+    .filtros input {
+      width: 100%;
+      min-width: 100%;
+    }
+
+    .btn {
+      width: 100%;
+    }
+
+    .tabs {
+      overflow-x: auto;
+    }
+
+    .tab {
+      white-space: nowrap;
+    }
+
+    .table-header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .search-bar {
+      width: 100%;
+    }
   }
 </style>
 </head>
@@ -450,10 +501,10 @@
   </div>
 
   <div class="tabs">
-    <div class="tab active" onclick="mudarAba('producao',this)">Produção</div>
-    <div class="tab" onclick="mudarAba('acompanhamento',this)">Acompanhamento</div>
-    <div class="tab" onclick="mudarAba('qualidade',this)">Qualidade</div>
-    <div class="tab" onclick="mudarAba('leituras',this)">Leituras</div>
+    <div class="tab active" onclick="mudarAba('producao', this)">Produção</div>
+    <div class="tab" onclick="mudarAba('acompanhamento', this)">Acompanhamento</div>
+    <div class="tab" onclick="mudarAba('qualidade', this)">Qualidade</div>
+    <div class="tab" onclick="mudarAba('leituras', this)">Leituras</div>
   </div>
 
   <div id="aba-producao" class="tab-content active">
@@ -464,22 +515,21 @@
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-count" id="count-producao"></span>
-        <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-producao',this.value)">
+        <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-producao', this.value)">
       </div>
 
       <table id="tbl-producao">
         <thead>
           <tr>
-            <th onclick="sortTable('tbl-producao',0)">Gerência</th>
-            <th onclick="sortTable('tbl-producao',1)">Pólo</th>
-            <th onclick="sortTable('tbl-producao',2)">Cidade</th>
-            <th onclick="sortTable('tbl-producao',3)">Sistema</th>
-            <th onclick="sortTable('tbl-producao',4)">Produção Período</th>
-            <th onclick="sortTable('tbl-producao',5)">Média Diária</th>
-            <th onclick="sortTable('tbl-producao',6)">Produção Mês</th>
-            <th onclick="sortTable('tbl-producao',7)">Vazão Média L/s</th>
-            <th onclick="sortTable('tbl-producao',8)">H/D</th>
-            <th onclick="sortTable('tbl-producao',9)">Horas Totais Mês</th>
+            <th onclick="sortTable('tbl-producao', 0)">Gerência</th>
+            <th onclick="sortTable('tbl-producao', 1)">Pólo</th>
+            <th onclick="sortTable('tbl-producao', 2)">Cidade</th>
+            <th onclick="sortTable('tbl-producao', 3)">Sistema</th>
+            <th onclick="sortTable('tbl-producao', 4)">Produção Mês</th>
+            <th onclick="sortTable('tbl-producao', 5)">Horas Totais Mês</th>
+            <th onclick="sortTable('tbl-producao', 6)">Média Diária m³</th>
+            <th onclick="sortTable('tbl-producao', 7)">Vazão Média L/s</th>
+            <th onclick="sortTable('tbl-producao', 8)">H/D</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -491,19 +541,19 @@
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-count" id="count-acomp"></span>
-        <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-acomp',this.value)">
+        <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-acomp', this.value)">
       </div>
 
       <table id="tbl-acomp">
         <thead>
           <tr>
-            <th onclick="sortTable('tbl-acomp',0)">Rank</th>
-            <th onclick="sortTable('tbl-acomp',1)">Gerência</th>
-            <th onclick="sortTable('tbl-acomp',2)">Pólo</th>
-            <th onclick="sortTable('tbl-acomp',3)">Cidade</th>
-            <th onclick="sortTable('tbl-acomp',4)">Sistema</th>
-            <th onclick="sortTable('tbl-acomp',5)">Análises</th>
-            <th onclick="sortTable('tbl-acomp',6)">Leituras Macro</th>
+            <th onclick="sortTable('tbl-acomp', 0)">Rank</th>
+            <th onclick="sortTable('tbl-acomp', 1)">Gerência</th>
+            <th onclick="sortTable('tbl-acomp', 2)">Pólo</th>
+            <th onclick="sortTable('tbl-acomp', 3)">Cidade</th>
+            <th onclick="sortTable('tbl-acomp', 4)">Sistema</th>
+            <th onclick="sortTable('tbl-acomp', 5)">Análises</th>
+            <th onclick="sortTable('tbl-acomp', 6)">Leituras Macro</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -534,7 +584,7 @@
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-count" id="count-leit"></span>
-        <input class="search-bar" placeholder="Buscar…" oninput="filtrarTabela('tbl-leit',this.value)">
+        <input class="search-bar" placeholder="Buscar…" oninput="filtrarTabela('tbl-leit', this.value)">
       </div>
 
       <table id="tbl-leit">
@@ -573,9 +623,9 @@ const API = window.OASA_API_BASE || (
 let abaAtiva = "producao";
 let combinacoesFiltros = [];
 
-// ─────────────────────────────────────────────
-// Inicialização
-// ─────────────────────────────────────────────
+// ======================================================
+// INICIALIZAÇÃO
+// ======================================================
 
 async function init() {
   await carregarFiltros();
@@ -589,9 +639,12 @@ async function carregarStatus() {
     const d = await r.json();
 
     document.getElementById("status-dot").className = "ok";
+
     document.getElementById("header-info").textContent =
       `${d.cache?.linhas?.toLocaleString("pt-BR") ?? "?"} registros · atualizado há ${d.cache?.idade_segundos ?? "?"}s`;
+
   } catch (e) {
+    console.error("Erro ao carregar status:", e);
     document.getElementById("header-info").textContent = "Erro ao conectar";
   }
 }
@@ -607,6 +660,7 @@ async function carregarFiltros() {
     preencherSelect("f-polo", d.polos || []);
     preencherSelect("f-cidade", d.cidades || []);
     preencherSelect("f-sistema", d.sistemas || []);
+
   } catch (e) {
     console.error("Erro ao carregar filtros:", e);
   }
@@ -616,16 +670,18 @@ function preencherSelect(id, lista) {
   const el = document.getElementById(id);
   const primeiro = el.options[0].outerHTML;
 
-  el.innerHTML = primeiro + [...new Set(lista)]
+  const listaTratada = [...new Set(lista)]
     .filter(v => v !== null && v !== undefined && String(v).trim() !== "")
-    .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"))
+    .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
+
+  el.innerHTML = primeiro + listaTratada
     .map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`)
     .join("");
 }
 
-// ─────────────────────────────────────────────
-// Cascata
-// ─────────────────────────────────────────────
+// ======================================================
+// CASCATA DOS FILTROS
+// ======================================================
 
 function atualizarCascata(nivel) {
   const ger = document.getElementById("f-gerencia").value;
@@ -634,9 +690,9 @@ function atualizarCascata(nivel) {
 
   let filtrado = combinacoesFiltros;
 
-  if (ger) filtrado = filtrado.filter(x => x["Gerência"] === ger);
-  if (pol) filtrado = filtrado.filter(x => x["Pólo"] === pol);
-  if (cid) filtrado = filtrado.filter(x => x["Cidade"] === cid);
+  if (ger) filtrado = filtrado.filter(x => String(x["Gerência"]) === String(ger));
+  if (pol) filtrado = filtrado.filter(x => String(x["Pólo"]) === String(pol));
+  if (cid) filtrado = filtrado.filter(x => String(x["Cidade"]) === String(cid));
 
   const unicos = col => [...new Set(
     filtrado
@@ -669,15 +725,16 @@ function atualizarCascata(nivel) {
   }
 }
 
-// ─────────────────────────────────────────────
-// Parâmetros e abas
-// ─────────────────────────────────────────────
+// ======================================================
+// PARÂMETROS E ABAS
+// ======================================================
 
 function params() {
   const p = new URLSearchParams();
 
   const add = (k, id) => {
-    const v = document.getElementById(id).value;
+    const el = document.getElementById(id);
+    const v = el ? el.value : "";
     if (v) p.append(k, v);
   };
 
@@ -708,7 +765,7 @@ function limparFiltros() {
     "f-data-fim"
   ].forEach(id => {
     const el = document.getElementById(id);
-    el.value = "";
+    if (el) el.value = "";
   });
 
   preencherSelect("f-gerencia", [...new Set(combinacoesFiltros.map(x => x["Gerência"]).filter(Boolean))]);
@@ -734,9 +791,9 @@ function mudarAba(nome, el) {
   if (nome === "leituras") carregarLeituras();
 }
 
-// ─────────────────────────────────────────────
-// Produção
-// ─────────────────────────────────────────────
+// ======================================================
+// PRODUÇÃO
+// ======================================================
 
 async function carregarProducao() {
   const cards = document.getElementById("cards-producao");
@@ -798,7 +855,7 @@ async function carregarProducao() {
       <div class="card c-purple">
         <div class="label">Horas Média Dia</div>
         <div class="value">${fmt2(totais.horasDia)}</div>
-        <div class="sub">H/D</div>
+        <div class="sub">H/D pelo horímetro</div>
       </div>
 
       <div class="card c-red">
@@ -817,12 +874,11 @@ async function carregarProducao() {
         <td>${escapeHtml(r.polo || "")}</td>
         <td>${escapeHtml(r.cidade || "")}</td>
         <td>${escapeHtml(r.sistema || "")}</td>
-        <td>${r.producao != null ? fmt(r.producao) : "—"}</td>
-        <td>${r.media_dia != null ? fmt2(r.media_dia) : "—"}</td>
         <td>${r.producao_mes != null ? fmt(r.producao_mes) : "—"}</td>
+        <td>${r.horas_mes != null ? fmt2(r.horas_mes) : "—"}</td>
+        <td>${r.media_dia != null ? fmt2(r.media_dia) : "—"}</td>
         <td>${r.vazao_ls != null ? fmt4(r.vazao_ls) : "—"}</td>
         <td>${r.horas_dia != null ? fmt2(r.horas_dia) : "—"}</td>
-        <td>${r.horas_mes != null ? fmt2(r.horas_mes) : "—"}</td>
       </tr>
     `).join("");
 
@@ -847,11 +903,13 @@ function calcularCamposProducao(rows) {
   return rows.map(r => {
     const producao = numNull(r.producao);
     const mediaDia = numNull(r.media_dia);
-    const horas = numNull(r.horas);
     const vazaoM3h = numNull(r.vazao_m3h);
-    const vazaoLs = numNull(r.vazao_ls) ?? (
-      vazaoM3h != null ? vazaoM3h * 1000 / 3600 : null
-    );
+
+    let vazaoLs = numNull(r.vazao_ls);
+
+    if (vazaoLs == null && vazaoM3h != null && vazaoM3h > 0) {
+      vazaoLs = vazaoM3h * 1000 / 3600;
+    }
 
     const producaoMes = numNull(r.projecao_mensal) ?? (
       mediaDia != null ? mediaDia * diasMes : null
@@ -867,14 +925,47 @@ function calcularCamposProducao(rows) {
       diasIntervalo = producao / mediaDia;
     }
 
+    /*
+      REGRA CORRETA DO H/D:
+
+      Não usar r.horas, porque r.horas é tempo corrido entre a primeira e a última leitura.
+
+      A média de horas por dia deve considerar o horímetro:
+      1. Usa r.horimetro_horas se o backend devolver a diferença do horímetro.
+      2. Se não devolver, calcula pelas mesmas bases:
+         horas_horimetro = produção / vazão_m3h
+      3. Se não tiver vazão_m3h, calcula por:
+         horas_horimetro = produção / (vazão_l/s * 3.6)
+    */
+
+    let horasHorimetro = numNull(r.horimetro_horas);
+
+    if (
+      horasHorimetro == null &&
+      producao != null &&
+      vazaoM3h != null &&
+      vazaoM3h > 0
+    ) {
+      horasHorimetro = producao / vazaoM3h;
+    }
+
+    if (
+      horasHorimetro == null &&
+      producao != null &&
+      vazaoLs != null &&
+      vazaoLs > 0
+    ) {
+      horasHorimetro = producao / (vazaoLs * 3.6);
+    }
+
     let horasDia = null;
 
     if (
-      horas != null &&
+      horasHorimetro != null &&
       diasIntervalo != null &&
       diasIntervalo > 0
     ) {
-      horasDia = horas / diasIntervalo;
+      horasDia = horasHorimetro / diasIntervalo;
     }
 
     const horasMes = horasDia != null ? horasDia * diasMes : null;
@@ -883,6 +974,7 @@ function calcularCamposProducao(rows) {
       ...r,
       producao_mes: producaoMes,
       vazao_ls: vazaoLs,
+      horas_horimetro: horasHorimetro,
       horas_dia: horasDia,
       horas_mes: horasMes
     };
@@ -909,14 +1001,15 @@ function diasNoMesReferencia() {
   return new Date(data.getFullYear(), data.getMonth() + 1, 0).getDate();
 }
 
-// ─────────────────────────────────────────────
-// Acompanhamento
-// ─────────────────────────────────────────────
+// ======================================================
+// ACOMPANHAMENTO
+// ======================================================
 
 async function carregarAcompanhamento() {
   try {
     const r = await fetch(`${API}/acompanhamento${params()}`);
     const d = await r.json();
+
     const rows = d.rows || [];
 
     document.getElementById("count-acomp").textContent =
@@ -958,9 +1051,9 @@ async function carregarAcompanhamento() {
   }
 }
 
-// ─────────────────────────────────────────────
-// Qualidade
-// ─────────────────────────────────────────────
+// ======================================================
+// QUALIDADE
+// ======================================================
 
 async function carregarQualidade() {
   try {
@@ -1044,9 +1137,9 @@ async function carregarQualidade() {
   }
 }
 
-// ─────────────────────────────────────────────
-// Leituras
-// ─────────────────────────────────────────────
+// ======================================================
+// LEITURAS
+// ======================================================
 
 async function carregarLeituras() {
   try {
@@ -1112,12 +1205,17 @@ async function carregarLeituras() {
   }
 }
 
-// ─────────────────────────────────────────────
-// Utilitários
-// ─────────────────────────────────────────────
+// ======================================================
+// UTILITÁRIOS
+// ======================================================
 
 function num(v) {
-  if (v === null || v === undefined || v === "" || Number.isNaN(Number(v))) {
+  if (
+    v === null ||
+    v === undefined ||
+    v === "" ||
+    Number.isNaN(Number(v))
+  ) {
     return 0;
   }
 
@@ -1125,7 +1223,12 @@ function num(v) {
 }
 
 function numNull(v) {
-  if (v === null || v === undefined || v === "" || Number.isNaN(Number(v))) {
+  if (
+    v === null ||
+    v === undefined ||
+    v === "" ||
+    Number.isNaN(Number(v))
+  ) {
     return null;
   }
 
@@ -1167,7 +1270,7 @@ function escapeHtml(valor) {
 function filtrarTabela(tblId, q) {
   const tbl = document.getElementById(tblId);
   const rows = tbl.querySelectorAll("tbody tr");
-  const lq = q.toLowerCase();
+  const lq = String(q || "").toLowerCase();
 
   rows.forEach(r => {
     r.style.display = r.textContent.toLowerCase().includes(lq) ? "" : "none";
