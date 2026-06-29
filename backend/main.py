@@ -78,7 +78,9 @@ def filtros():
     
     # Extrai as combinações únicas para a cascata no frontend
     cols = ["Gerência", "Pólo", "Cidade", "Sistema"]
-    comb = df[cols].drop_duplicates().fillna("")
+    
+    # .astype(object) remove a restrição de colunas categóricas permitindo o fillna("")
+    comb = df[cols].drop_duplicates().astype(object).fillna("")
 
     return {
         "combinacoes": comb.to_dict(orient="records"),
@@ -247,3 +249,4 @@ def leituras(
 
     rows = df.to_dict("records")
     return {"rows": rows, "total": len(rows)}
+
