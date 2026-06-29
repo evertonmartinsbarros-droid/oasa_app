@@ -470,8 +470,8 @@ tr:hover td{background:var(--surface2)}
 
         <div class="table-actions">
           <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-producao',this.value)">
-          <button class="btn-excel" onclick="exportarProducaoExcel()">Exportar Excel</button>
-          <button class="btn-pdf" onclick="exportarProducaoPDF()">Exportar PDF</button>
+          <button class="btn-excel" onclick="exportarTabelaExcel('tbl-producao','Produção OASA','producao_oasa')">Exportar Excel</button>
+          <button class="btn-pdf" onclick="exportarTabelaPDF('tbl-producao','Produção OASA','producao_oasa')">Exportar PDF</button>
         </div>
       </div>
 
@@ -498,7 +498,12 @@ tr:hover td{background:var(--surface2)}
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-count" id="count-acomp"></span>
-        <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-acomp',this.value)">
+
+        <div class="table-actions">
+          <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-acomp',this.value)">
+          <button class="btn-excel" onclick="exportarTabelaExcel('tbl-acomp','Acompanhamento OASA','acompanhamento_oasa')">Exportar Excel</button>
+          <button class="btn-pdf" onclick="exportarTabelaPDF('tbl-acomp','Acompanhamento OASA','acompanhamento_oasa')">Exportar PDF</button>
+        </div>
       </div>
 
       <table id="tbl-acomp">
@@ -520,6 +525,17 @@ tr:hover td{background:var(--surface2)}
   </div>
 
   <div id="aba-qualidade" class="tab-content">
+    <div class="table-wrap" style="margin-bottom:14px">
+      <div class="table-header">
+        <span class="table-count" id="count-qualidade">Resumo de qualidade</span>
+
+        <div class="table-actions">
+          <button class="btn-excel" onclick="exportarQualidadeExcel()">Exportar Excel</button>
+          <button class="btn-pdf" onclick="exportarQualidadePDF()">Exportar PDF</button>
+        </div>
+      </div>
+    </div>
+
     <div class="qual-grid" id="qual-grid">
       <div class="loading"><span class="spinner"></span>Carregando…</div>
     </div>
@@ -541,7 +557,12 @@ tr:hover td{background:var(--surface2)}
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-count" id="count-leit"></span>
-        <input class="search-bar" placeholder="Buscar…" oninput="filtrarTabela('tbl-leit',this.value)">
+
+        <div class="table-actions">
+          <input class="search-bar" placeholder="Buscar…" oninput="filtrarTabela('tbl-leit',this.value)">
+          <button class="btn-excel" onclick="exportarTabelaExcel('tbl-leit','Leituras OASA','leituras_oasa')">Exportar Excel</button>
+          <button class="btn-pdf" onclick="exportarTabelaPDF('tbl-leit','Leituras OASA','leituras_oasa')">Exportar PDF</button>
+        </div>
       </div>
 
       <table id="tbl-leit">
@@ -577,6 +598,14 @@ const API = window.OASA_API_BASE || (
 
 let abaAtiva = "producao";
 let combinacoesFiltros = [];
+let ultimaQualidade = null;
+
+const MAPA_QUALIDADE = [
+  {key:"cloro", label:"Cloro Residual Livre", unidade:"mg/L", limite:"≤ 5,0"},
+  {key:"turbidez", label:"Turbidez", unidade:"uT", limite:"≤ 1,0"},
+  {key:"cor", label:"Cor Aparente", unidade:"uH", limite:"≤ 15"},
+  {key:"fluoreto", label:"Fluoreto", unidade:"mg/L", limite:"≤ 1,5"}
+];
 
 // ======================================================
 // INICIALIZAÇÃO
@@ -909,305 +938,6 @@ function diasNoMesReferencia(){
 }
 
 // ======================================================
-// EXPORTAR EXCEL — PRODUÇÃO
-// ======================================================
-
-function exportarProducaoExcel(){
-  const tabela = document.getElementById("tbl-producao");
-
-  const cabecalhos = Array.from(tabela.querySelectorAll("thead th"))
-    .map(th => th.textContent.trim());
-
-  const linhas = Array.from(tabela.querySelectorAll("tbody tr"));
-
-  if(linhas.length === 0){
-    alert("Não há dados para exportar.");
-    return;
-  }
-
-  const filtros = {
-    gerencia: document.getElementById("f-gerencia")?.value || "Todas",
-    polo: document.getElementById("f-polo")?.value || "Todos",
-    cidade: document.getElementById("f-cidade")?.value || "Todas",
-    sistema: document.getElementById("f-sistema")?.value || "Todos",
-    dataIni: document.getElementById("f-data-ini")?.value || "Não informada",
-    dataFim: document.getElementById("f-data-fim")?.value || "Não informada"
-  };
-
-  const hoje = new Date().toLocaleString("pt-BR");
-
-  const cabecalhoTabela = cabecalhos
-    .map(c => `<th>${escapeHtml(c)}</th>`)
-    .join("");
-
-  const linhasTabela = linhas.map(tr => {
-    const celulas = Array.from(tr.querySelectorAll("td"))
-      .map(td => `<td style="mso-number-format:'\\@';">${escapeHtml(td.textContent.trim())}</td>`)
-      .join("");
-
-    return `<tr>${celulas}</tr>`;
-  }).join("");
-
-  const htmlExcel = `
-<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:x="urn:schemas-microsoft-com:office:excel"
-      xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="UTF-8">
-
-<!--[if gte mso 9]>
-<xml>
-  <x:ExcelWorkbook>
-    <x:ExcelWorksheets>
-      <x:ExcelWorksheet>
-        <x:Name>Produção</x:Name>
-        <x:WorksheetOptions>
-          <x:DisplayGridlines/>
-        </x:WorksheetOptions>
-      </x:ExcelWorksheet>
-    </x:ExcelWorksheets>
-  </x:ExcelWorkbook>
-</xml>
-<![endif]-->
-
-<style>
-table{
-  border-collapse:collapse;
-  width:100%;
-}
-
-th{
-  background:#1e293b;
-  color:#ffffff;
-  font-weight:bold;
-  border:1px solid #334155;
-  padding:8px;
-  text-align:left;
-}
-
-td{
-  border:1px solid #cbd5e1;
-  padding:6px;
-  mso-number-format:"\\@";
-}
-
-.titulo{
-  font-size:18px;
-  font-weight:bold;
-  color:#0f172a;
-}
-
-.subtitulo{
-  color:#475569;
-}
-
-.filtro{
-  background:#f1f5f9;
-  font-weight:bold;
-}
-</style>
-</head>
-
-<body>
-<table>
-  <tr>
-    <td colspan="${cabecalhos.length}" class="titulo">Relatório de Produção — OASA</td>
-  </tr>
-
-  <tr>
-    <td colspan="${cabecalhos.length}" class="subtitulo">Gerado em ${escapeHtml(hoje)}</td>
-  </tr>
-
-  <tr><td colspan="${cabecalhos.length}"></td></tr>
-
-  <tr>
-    <td class="filtro">Gerência</td>
-    <td>${escapeHtml(filtros.gerencia)}</td>
-    <td class="filtro">Pólo</td>
-    <td>${escapeHtml(filtros.polo)}</td>
-    <td class="filtro">Cidade</td>
-    <td>${escapeHtml(filtros.cidade)}</td>
-  </tr>
-
-  <tr>
-    <td class="filtro">Sistema</td>
-    <td>${escapeHtml(filtros.sistema)}</td>
-    <td class="filtro">Data inicial</td>
-    <td>${escapeHtml(filtros.dataIni)}</td>
-    <td class="filtro">Data final</td>
-    <td>${escapeHtml(filtros.dataFim)}</td>
-  </tr>
-
-  <tr><td colspan="${cabecalhos.length}"></td></tr>
-
-  <tr>
-    ${cabecalhoTabela}
-  </tr>
-
-  ${linhasTabela}
-</table>
-</body>
-</html>
-  `;
-
-  const blob = new Blob(["\ufeff" + htmlExcel], {
-    type:"application/vnd.ms-excel;charset=utf-8;"
-  });
-
-  const url = URL.createObjectURL(blob);
-
-  const dataArquivo = new Date().toISOString().slice(0,10);
-  const nomeArquivo = `producao_oasa_${dataArquivo}.xls`;
-
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = nomeArquivo;
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  URL.revokeObjectURL(url);
-}
-
-// ======================================================
-// EXPORTAR PDF — PRODUÇÃO
-// ======================================================
-
-function exportarProducaoPDF(){
-  const tabela = document.getElementById("tbl-producao");
-
-  const linhasVisiveis = Array.from(tabela.querySelectorAll("tbody tr"))
-    .filter(tr => tr.style.display !== "none");
-
-  if(linhasVisiveis.length === 0){
-    alert("Não há linhas visíveis para exportar.");
-    return;
-  }
-
-  const filtros = {
-    gerencia: document.getElementById("f-gerencia")?.value || "Todas",
-    polo: document.getElementById("f-polo")?.value || "Todos",
-    cidade: document.getElementById("f-cidade")?.value || "Todas",
-    sistema: document.getElementById("f-sistema")?.value || "Todos",
-    dataIni: document.getElementById("f-data-ini")?.value || "Não informada",
-    dataFim: document.getElementById("f-data-fim")?.value || "Não informada"
-  };
-
-  const hoje = new Date().toLocaleString("pt-BR");
-
-  const cards = Array.from(document.querySelectorAll("#cards-producao .card")).map(card => {
-    const label = card.querySelector(".label")?.textContent || "";
-    const value = card.querySelector(".value")?.textContent || "";
-    const sub = card.querySelector(".sub")?.textContent || "";
-
-    return `
-      <div class="pdf-card">
-        <div class="pdf-card-label">${escapeHtml(label)}</div>
-        <div class="pdf-card-value">${escapeHtml(value)}</div>
-        <div class="pdf-card-sub">${escapeHtml(sub)}</div>
-      </div>
-    `;
-  }).join("");
-
-  const cabecalho = Array.from(tabela.querySelectorAll("thead th"))
-    .map(th => `<th>${escapeHtml(th.textContent.trim())}</th>`)
-    .join("");
-
-  const corpo = linhasVisiveis.map(tr => {
-    const tds = Array.from(tr.querySelectorAll("td"))
-      .map(td => `<td>${escapeHtml(td.textContent.trim())}</td>`)
-      .join("");
-
-    return `<tr>${tds}</tr>`;
-  }).join("");
-
-  const htmlPDF = `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<title>Relatório Produção OASA</title>
-<style>
-*{box-sizing:border-box}
-body{font-family:Arial,sans-serif;color:#111827;margin:24px;font-size:12px}
-.pdf-header{border-bottom:2px solid #1e293b;padding-bottom:12px;margin-bottom:16px}
-.pdf-title{font-size:20px;font-weight:700;margin-bottom:4px;color:#0f172a}
-.pdf-subtitle{font-size:11px;color:#475569}
-.pdf-filtros{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin:14px 0 18px 0;font-size:11px;background:#f1f5f9;border:1px solid #cbd5e1;padding:10px;border-radius:6px}
-.pdf-filtros strong{color:#0f172a}
-.pdf-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
-.pdf-card{border:1px solid #cbd5e1;border-radius:6px;padding:10px;background:#f8fafc}
-.pdf-card-label{font-size:10px;text-transform:uppercase;color:#475569;margin-bottom:5px}
-.pdf-card-value{font-size:18px;font-weight:700;color:#0f172a}
-.pdf-card-sub{font-size:10px;color:#64748b;margin-top:3px}
-table{width:100%;border-collapse:collapse;margin-top:10px}
-th{background:#1e293b;color:#fff;padding:7px;border:1px solid #334155;font-size:10px;text-align:left;text-transform:uppercase}
-td{padding:6px;border:1px solid #cbd5e1;font-size:10px}
-tr:nth-child(even) td{background:#f8fafc}
-.pdf-footer{margin-top:18px;font-size:10px;color:#64748b;border-top:1px solid #cbd5e1;padding-top:8px}
-@page{size:A4 landscape;margin:12mm}
-@media print{body{margin:0}}
-</style>
-</head>
-<body>
-
-<div class="pdf-header">
-  <div class="pdf-title">Relatório de Produção — OASA</div>
-  <div class="pdf-subtitle">Gerado em ${escapeHtml(hoje)}</div>
-</div>
-
-<div class="pdf-filtros">
-  <div><strong>Gerência:</strong> ${escapeHtml(filtros.gerencia)}</div>
-  <div><strong>Pólo:</strong> ${escapeHtml(filtros.polo)}</div>
-  <div><strong>Cidade:</strong> ${escapeHtml(filtros.cidade)}</div>
-  <div><strong>Sistema:</strong> ${escapeHtml(filtros.sistema)}</div>
-  <div><strong>Data inicial:</strong> ${escapeHtml(filtros.dataIni)}</div>
-  <div><strong>Data final:</strong> ${escapeHtml(filtros.dataFim)}</div>
-</div>
-
-<div class="pdf-cards">
-  ${cards}
-</div>
-
-<table>
-  <thead>
-    <tr>${cabecalho}</tr>
-  </thead>
-  <tbody>
-    ${corpo}
-  </tbody>
-</table>
-
-<div class="pdf-footer">
-  Total exportado: ${linhasVisiveis.length} sistema(s). Valores conforme filtros aplicados no dashboard.
-</div>
-
-<script>
-window.onload = function(){
-  setTimeout(function(){
-    window.print();
-  },300);
-};
-<\/script>
-
-</body>
-</html>
-  `;
-
-  const janela = window.open("", "_blank");
-
-  if(!janela){
-    alert("O navegador bloqueou a janela de exportação. Libere pop-ups para este site.");
-    return;
-  }
-
-  janela.document.open();
-  janela.document.write(htmlPDF);
-  janela.document.close();
-}
-
-// ======================================================
 // ACOMPANHAMENTO
 // ======================================================
 
@@ -1258,11 +988,13 @@ async function carregarQualidade(){
     const r = await fetch(`${API}/qualidade${params()}`);
     const d = await r.json();
 
+    ultimaQualidade = d;
+
     const params_q = [
-      {key:"cloro",label:"Cloro Residual Livre",unidade:"mg/L",limite:"≤ 5,0",cor:"#3b82f6"},
-      {key:"turbidez",label:"Turbidez",unidade:"uT",limite:"≤ 1,0",cor:"#8b5cf6"},
-      {key:"cor",label:"Cor Aparente",unidade:"uH",limite:"≤ 15",cor:"#f59e0b"},
-      {key:"fluoreto",label:"Fluoreto",unidade:"mg/L",limite:"≤ 1,5",cor:"#14b8a6"}
+      {...MAPA_QUALIDADE[0], cor:"#3b82f6"},
+      {...MAPA_QUALIDADE[1], cor:"#8b5cf6"},
+      {...MAPA_QUALIDADE[2], cor:"#f59e0b"},
+      {...MAPA_QUALIDADE[3], cor:"#14b8a6"}
     ];
 
     document.getElementById("qual-grid").innerHTML = params_q.map(p => {
@@ -1350,6 +1082,326 @@ async function carregarLeituras(){
   }catch(e){
     console.error("Erro leituras:",e);
   }
+}
+
+// ======================================================
+// EXPORTAÇÃO GENÉRICA
+// ======================================================
+
+function obterFiltrosAtuais(){
+  return {
+    gerencia: document.getElementById("f-gerencia")?.value || "Todas",
+    polo: document.getElementById("f-polo")?.value || "Todos",
+    cidade: document.getElementById("f-cidade")?.value || "Todas",
+    sistema: document.getElementById("f-sistema")?.value || "Todos",
+    dataIni: document.getElementById("f-data-ini")?.value || "Não informada",
+    dataFim: document.getElementById("f-data-fim")?.value || "Não informada"
+  };
+}
+
+function nomeArquivoSeguro(nome){
+  const dataArquivo = new Date().toISOString().slice(0,10);
+
+  return `${nome}_${dataArquivo}`
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9_-]+/g,"_")
+    .replace(/_+/g,"_");
+}
+
+function extrairTabela(tblId, somenteVisiveis=false){
+  const tabela = document.getElementById(tblId);
+
+  const cabecalhos = Array.from(tabela.querySelectorAll("thead th"))
+    .map(th => th.textContent.trim());
+
+  let linhas = Array.from(tabela.querySelectorAll("tbody tr"));
+
+  if(somenteVisiveis){
+    linhas = linhas.filter(tr => tr.style.display !== "none");
+  }
+
+  const dados = linhas.map(tr =>
+    Array.from(tr.querySelectorAll("td")).map(td => td.textContent.trim())
+  );
+
+  return {cabecalhos, dados};
+}
+
+function montarTabelaHtml(cabecalhos, dados){
+  const head = cabecalhos
+    .map(c => `<th>${escapeHtml(c)}</th>`)
+    .join("");
+
+  const body = dados.map(linha => {
+    const tds = linha
+      .map(v => `<td style="mso-number-format:'\\@';">${escapeHtml(v)}</td>`)
+      .join("");
+
+    return `<tr>${tds}</tr>`;
+  }).join("");
+
+  return {head, body};
+}
+
+function exportarTabelaExcel(tblId, titulo, nomeBase){
+  const {cabecalhos, dados} = extrairTabela(tblId, false);
+
+  if(dados.length === 0){
+    alert("Não há dados para exportar.");
+    return;
+  }
+
+  exportarDadosExcel(titulo, nomeBase, cabecalhos, dados);
+}
+
+function exportarTabelaPDF(tblId, titulo, nomeBase){
+  const {cabecalhos, dados} = extrairTabela(tblId, true);
+
+  if(dados.length === 0){
+    alert("Não há linhas visíveis para exportar.");
+    return;
+  }
+
+  exportarDadosPDF(titulo, nomeBase, cabecalhos, dados);
+}
+
+function exportarDadosExcel(titulo, nomeBase, cabecalhos, dados){
+  const filtros = obterFiltrosAtuais();
+  const hoje = new Date().toLocaleString("pt-BR");
+  const tabela = montarTabelaHtml(cabecalhos, dados);
+
+  const htmlExcel = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="UTF-8">
+
+<!--[if gte mso 9]>
+<xml>
+  <x:ExcelWorkbook>
+    <x:ExcelWorksheets>
+      <x:ExcelWorksheet>
+        <x:Name>${escapeHtml(titulo).substring(0,31)}</x:Name>
+        <x:WorksheetOptions>
+          <x:DisplayGridlines/>
+        </x:WorksheetOptions>
+      </x:ExcelWorksheet>
+    </x:ExcelWorksheets>
+  </x:ExcelWorkbook>
+</xml>
+<![endif]-->
+
+<style>
+table{border-collapse:collapse;width:100%}
+th{background:#1e293b;color:#ffffff;font-weight:bold;border:1px solid #334155;padding:8px;text-align:left}
+td{border:1px solid #cbd5e1;padding:6px;mso-number-format:"\\@"}
+.titulo{font-size:18px;font-weight:bold;color:#0f172a}
+.subtitulo{color:#475569}
+.filtro{background:#f1f5f9;font-weight:bold}
+</style>
+</head>
+
+<body>
+<table>
+  <tr>
+    <td colspan="${cabecalhos.length}" class="titulo">${escapeHtml(titulo)}</td>
+  </tr>
+
+  <tr>
+    <td colspan="${cabecalhos.length}" class="subtitulo">Gerado em ${escapeHtml(hoje)}</td>
+  </tr>
+
+  <tr><td colspan="${cabecalhos.length}"></td></tr>
+
+  <tr>
+    <td class="filtro">Gerência</td>
+    <td>${escapeHtml(filtros.gerencia)}</td>
+    <td class="filtro">Pólo</td>
+    <td>${escapeHtml(filtros.polo)}</td>
+    <td class="filtro">Cidade</td>
+    <td>${escapeHtml(filtros.cidade)}</td>
+  </tr>
+
+  <tr>
+    <td class="filtro">Sistema</td>
+    <td>${escapeHtml(filtros.sistema)}</td>
+    <td class="filtro">Data inicial</td>
+    <td>${escapeHtml(filtros.dataIni)}</td>
+    <td class="filtro">Data final</td>
+    <td>${escapeHtml(filtros.dataFim)}</td>
+  </tr>
+
+  <tr><td colspan="${cabecalhos.length}"></td></tr>
+
+  <tr>${tabela.head}</tr>
+
+  ${tabela.body}
+</table>
+</body>
+</html>
+  `;
+
+  const blob = new Blob(["\ufeff" + htmlExcel], {
+    type:"application/vnd.ms-excel;charset=utf-8;"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `${nomeArquivoSeguro(nomeBase)}.xls`;
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+}
+
+function exportarDadosPDF(titulo, nomeBase, cabecalhos, dados){
+  const filtros = obterFiltrosAtuais();
+  const hoje = new Date().toLocaleString("pt-BR");
+  const tabela = montarTabelaHtml(cabecalhos, dados);
+
+  const htmlPDF = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(titulo)}</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;color:#111827;margin:24px;font-size:12px}
+.pdf-header{border-bottom:2px solid #1e293b;padding-bottom:12px;margin-bottom:16px}
+.pdf-title{font-size:20px;font-weight:700;margin-bottom:4px;color:#0f172a}
+.pdf-subtitle{font-size:11px;color:#475569}
+.pdf-filtros{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin:14px 0 18px 0;font-size:11px;background:#f1f5f9;border:1px solid #cbd5e1;padding:10px;border-radius:6px}
+.pdf-filtros strong{color:#0f172a}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th{background:#1e293b;color:#fff;padding:7px;border:1px solid #334155;font-size:10px;text-align:left;text-transform:uppercase}
+td{padding:6px;border:1px solid #cbd5e1;font-size:10px}
+tr:nth-child(even) td{background:#f8fafc}
+.pdf-footer{margin-top:18px;font-size:10px;color:#64748b;border-top:1px solid #cbd5e1;padding-top:8px}
+@page{size:A4 landscape;margin:12mm}
+@media print{body{margin:0}}
+</style>
+</head>
+
+<body>
+
+<div class="pdf-header">
+  <div class="pdf-title">${escapeHtml(titulo)}</div>
+  <div class="pdf-subtitle">Gerado em ${escapeHtml(hoje)}</div>
+</div>
+
+<div class="pdf-filtros">
+  <div><strong>Gerência:</strong> ${escapeHtml(filtros.gerencia)}</div>
+  <div><strong>Pólo:</strong> ${escapeHtml(filtros.polo)}</div>
+  <div><strong>Cidade:</strong> ${escapeHtml(filtros.cidade)}</div>
+  <div><strong>Sistema:</strong> ${escapeHtml(filtros.sistema)}</div>
+  <div><strong>Data inicial:</strong> ${escapeHtml(filtros.dataIni)}</div>
+  <div><strong>Data final:</strong> ${escapeHtml(filtros.dataFim)}</div>
+</div>
+
+<table>
+  <thead>
+    <tr>${tabela.head}</tr>
+  </thead>
+  <tbody>
+    ${tabela.body}
+  </tbody>
+</table>
+
+<div class="pdf-footer">
+  Total exportado: ${dados.length} registro(s). Valores conforme filtros aplicados no dashboard.
+</div>
+
+<script>
+window.onload = function(){
+  setTimeout(function(){
+    window.print();
+  },300);
+};
+<\/script>
+
+</body>
+</html>
+  `;
+
+  const janela = window.open("", "_blank");
+
+  if(!janela){
+    alert("O navegador bloqueou a janela de exportação. Libere pop-ups para este site.");
+    return;
+  }
+
+  janela.document.open();
+  janela.document.write(htmlPDF);
+  janela.document.close();
+}
+
+// ======================================================
+// EXPORTAÇÃO — QUALIDADE
+// ======================================================
+
+function montarDadosQualidade(){
+  const d = ultimaQualidade || {};
+
+  const cabecalhos = [
+    "Parâmetro",
+    "Limite",
+    "Unidade",
+    "Adequado",
+    "Inadequado",
+    "Abaixo mínimo",
+    "Total",
+    "% Adequado"
+  ];
+
+  const dados = MAPA_QUALIDADE.map(p => {
+    const q = d[p.key] || {};
+    const adequado = Number(q.adequado || 0);
+    const inadequado = Number(q.inadequado || 0);
+    const abaixoMin = Number(q.abaixo_min || 0);
+    const total = Number(q.total || 0);
+    const pct = total > 0 ? Math.round((adequado / total) * 100) : 0;
+
+    return [
+      p.label,
+      p.limite,
+      p.unidade,
+      adequado,
+      inadequado,
+      abaixoMin,
+      total,
+      `${pct}%`
+    ];
+  });
+
+  return {cabecalhos, dados};
+}
+
+function exportarQualidadeExcel(){
+  if(!ultimaQualidade){
+    alert("Carregue a aba Qualidade antes de exportar.");
+    return;
+  }
+
+  const {cabecalhos, dados} = montarDadosQualidade();
+  exportarDadosExcel("Qualidade OASA", "qualidade_oasa", cabecalhos, dados);
+}
+
+function exportarQualidadePDF(){
+  if(!ultimaQualidade){
+    alert("Carregue a aba Qualidade antes de exportar.");
+    return;
+  }
+
+  const {cabecalhos, dados} = montarDadosQualidade();
+  exportarDadosPDF("Qualidade OASA", "qualidade_oasa", cabecalhos, dados);
 }
 
 // ======================================================
