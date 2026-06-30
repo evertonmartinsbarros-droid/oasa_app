@@ -83,15 +83,9 @@ def _get_service():
 
     if cred_json:
         info = json.loads(cred_json)
-        creds = Credentials.from_service_account_info(
-            info,
-            scopes=SCOPES,
-        )
+        creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     else:
-        creds = Credentials.from_service_account_file(
-            "credentials.json",
-            scopes=SCOPES,
-        )
+        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
     return build("sheets", "v4", credentials=creds)
 
@@ -347,7 +341,7 @@ def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
         else:
             dias = None
 
-        # Prioridade de produção:
+        # Prioridade:
         # Macro Saída > Macro Entrada > Macro Processo
         pb = dms if dms is not None else (
             dme if dme is not None else dmp
@@ -392,9 +386,8 @@ def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
         dif_me.append(dme)
         dif_ms.append(dms)
         dif_mp.append(dmp)
-        dif_horas.append(dhor)
-        dias_int.append(dias)
-    b)
+        dif_horas.append(dhor)nd(dias)
+        prod_base.append(pb)
         producao.append(pf)
         prod_media_dia.append(pm)
 
@@ -477,7 +470,6 @@ def _executar_etl() -> pd.DataFrame:
     if "Gerência" not in df.columns:
         df["Gerência"] = "OASA"
 
-    # Conversão robusta de data
     df["Data_Hora"] = pd.to_datetime(
         df.get(
             "Data/Hora (Leitura)",
@@ -524,9 +516,6 @@ def _executar_etl() -> pd.DataFrame:
                 }
             )
 
-            # Padrão BR:
-            # se tiver vírgula, remove ponto de milhar
-            # e troca vírgula decimal por ponto.
             s = s.apply(
                 lambda x: x.replace(".", "").replace(",", ".")
                 if isinstance(x, str) and "," in x
@@ -538,8 +527,6 @@ def _executar_etl() -> pd.DataFrame:
             if limit:
                 s = s.where(s.abs() <= limit)
 
-            # REGRA NOVA:
-            # valor 0 em macro/horímetro é sem leitura
             if zero_as_na:
                 s = s.mask(s == 0)
 
@@ -598,9 +585,8 @@ def _executar_etl() -> pd.DataFrame:
 
     gc.collect()
 
-    # Mantém a consolidação atual:
-    # última linha por Cidade/Sistema/Data.
     df = df.sort_values("Data_Hora")
+
     df = df.groupby(
         [
             "Cidade",
