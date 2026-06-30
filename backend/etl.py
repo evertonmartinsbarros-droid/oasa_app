@@ -83,9 +83,15 @@ def _get_service():
 
     if cred_json:
         info = json.loads(cred_json)
-        creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+        creds = Credentials.from_service_account_info(
+            info,
+            scopes=SCOPES,
+        )
     else:
-        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+        creds = Credentials.from_service_account_file(
+            "credentials.json",
+            scopes=SCOPES,
+        )
 
     return build("sheets", "v4", credentials=creds)
 
@@ -325,8 +331,7 @@ def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
             else None
         )
 
-        dhor = (
-            hor - hor_ant
+        dhor =or_ant
             if (
                 hor_ant is not None
                 and hor is not None
@@ -386,7 +391,8 @@ def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
         dif_me.append(dme)
         dif_ms.append(dms)
         dif_mp.append(dmp)
-        dif_horas.append(dhor)nd(dias)
+        dif_horas.append(dhor)
+        dias_int.append(dias)
         prod_base.append(pb)
         producao.append(pf)
         prod_media_dia.append(pm)
@@ -527,6 +533,8 @@ def _executar_etl() -> pd.DataFrame:
             if limit:
                 s = s.where(s.abs() <= limit)
 
+            # Aqui está a regra nova:
+            # zero em macro/horímetro é tratado como sem leitura.
             if zero_as_na:
                 s = s.mask(s == 0)
 
