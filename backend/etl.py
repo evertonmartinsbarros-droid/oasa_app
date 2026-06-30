@@ -18,15 +18,12 @@ from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
-
 load_dotenv()
-
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
 ]
-
 
 _ids_leituras_env = os.getenv(
     "SHEET_IDS_LEITURAS",
@@ -48,7 +45,6 @@ ABA_LEITURAS = os.getenv("ABA_LEITURAS", "Registos")
 ABA_PARTICULARIDADES = os.getenv("ABA_PARTICULARIDADES", "04_Chaves_Merge")
 CACHE_TTL_SEGUNDOS = int(os.getenv("CACHE_TTL", "300"))
 
-
 COLUNAS_LEITURAS = [
     "Data/Hora (Leitura)",
     "Gerência",
@@ -64,7 +60,6 @@ COLUNAS_LEITURAS = [
     "Cloro (mg/L)",
     "Fluoreto (mg/L)",
 ]
-
 
 _cache = {
     "df": None,
@@ -83,15 +78,9 @@ def _get_service():
 
     if cred_json:
         info = json.loads(cred_json)
-        creds = Credentials.from_service_account_info(
-            info,
-            scopes=SCOPES,
-        )
+        creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     else:
-        creds = Credentials.from_service_account_file(
-            "credentials.json",
-            scopes=SCOPES,
-        )
+        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
     return build("sheets", "v4", credentials=creds)
 
@@ -331,7 +320,8 @@ def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
             else None
         )
 
-        dhor =or_ant
+        dhor = (
+            hor - hor_ant
             if (
                 hor_ant is not None
                 and hor is not None
@@ -419,8 +409,7 @@ def _calcular_grupo(g: pd.DataFrame) -> pd.DataFrame:
         Dif_Macro_Processo=dif_mp,
         Dif_Horas=dif_horas,
         Dias_Intervalo=dias_int,
-        Producao_Base=prod_base,
-        Producao=producao,
+        Producao_Base=prodo=producao,
         Producao_Media_Dia=prod_media_dia,
     )
 
@@ -446,9 +435,7 @@ def _executar_etl() -> pd.DataFrame:
 
             if not f.empty:
                 f = f.dropna(axis=1, how="all")
-
                 print(f"[ETL] Planilha {sid}: {len(f)} linhas lidas.")
-
                 frames.append(f)
 
         except Exception as e:
@@ -533,7 +520,7 @@ def _executar_etl() -> pd.DataFrame:
             if limit:
                 s = s.where(s.abs() <= limit)
 
-            # Aqui está a regra nova:
+            # Regra:
             # zero em macro/horímetro é tratado como sem leitura.
             if zero_as_na:
                 s = s.mask(s == 0)
