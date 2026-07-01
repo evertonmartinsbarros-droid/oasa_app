@@ -364,6 +364,7 @@ tr:hover td{background:var(--surface2)}
 .badge-red{background:#dc262622;color:var(--red)}
 .badge-yellow{background:#d9770622;color:var(--yellow)}
 .badge-blue{background:#2563eb22;color:var(--blue)}
+.badge-purple{background:#8b5cf622;color:var(--purple)}
 
 .rank-1{color:var(--red);font-weight:700}
 .rank-2{color:var(--yellow)}
@@ -539,6 +540,7 @@ tr:hover td{background:var(--surface2)}
     <div class="tab" onclick="mudarAba('acompanhamento',this)">Acompanhamento</div>
     <div class="tab" onclick="mudarAba('qualidade',this)">Qualidade</div>
     <div class="tab" onclick="mudarAba('leituras',this)">Leituras</div>
+    <div class="tab" onclick="mudarAba('desvios',this)">Desvios</div>
   </div>
 
   <div id="aba-producao" class="tab-content active">
@@ -713,6 +715,71 @@ tr:hover td{background:var(--surface2)}
             <th onclick="sortTable('tbl-leit',9)">Fluoreto</th>
             <th onclick="sortTable('tbl-leit',10)">Produção</th>
             <th onclick="sortTable('tbl-leit',11)">Tipo</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="aba-desvios" class="tab-content">
+    <div class="filtros" style="margin-bottom:14px">
+      <label>Comparar com
+        <select id="desvio-metodo" onchange="carregarDesvios()">
+          <option value="anterior">Período anterior equivalente</option>
+          <option value="historico">Média histórica do sistema</option>
+        </select>
+      </label>
+
+      <label>Limiar de queda (%)
+        <input type="number" id="desvio-limiar" value="15" min="1" max="90" step="1" oninput="renderizarTabelaDesvios()">
+      </label>
+
+      <span id="desvio-periodo-info" style="font-size:11px;color:var(--muted);align-self:center;flex:1"></span>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Maiores quedas</div>
+        <div class="chart-subtitle">Sistemas com maior queda no pior indicador (possível perda de vazão)</div>
+        <div id="chart-desvios"></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Maiores altas</div>
+        <div class="chart-subtitle">Vazão/produção subindo sem aumento correspondente nas horas trabalhadas (possível vazamento)</div>
+        <div id="chart-desvios-alta"></div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <span class="table-count" id="count-desvios"></span>
+
+        <div class="table-actions">
+          <input class="search-bar" placeholder="Buscar sistema…" oninput="filtrarTabela('tbl-desvios',this.value)">
+          <button class="btn-excel" onclick="exportarTabelaExcel('tbl-desvios','Desvios OASA','desvios_oasa')">Exportar Excel</button>
+          <button class="btn-pdf" onclick="exportarTabelaPDF('tbl-desvios','Desvios OASA','desvios_oasa')">Exportar PDF</button>
+        </div>
+      </div>
+
+      <table id="tbl-desvios">
+        <thead>
+          <tr>
+            <th onclick="sortTable('tbl-desvios',0)">Gerência</th>
+            <th onclick="sortTable('tbl-desvios',1)">Pólo</th>
+            <th onclick="sortTable('tbl-desvios',2)">Cidade</th>
+            <th onclick="sortTable('tbl-desvios',3)">Sistema</th>
+            <th onclick="sortTable('tbl-desvios',4)">Vazão Atual L/s</th>
+            <th onclick="sortTable('tbl-desvios',5)">Vazão Base L/s</th>
+            <th onclick="sortTable('tbl-desvios',6)">Δ Vazão</th>
+            <th onclick="sortTable('tbl-desvios',7)">Produção/dia Atual</th>
+            <th onclick="sortTable('tbl-desvios',8)">Produção/dia Base</th>
+            <th onclick="sortTable('tbl-desvios',9)">Δ Produção</th>
+            <th onclick="sortTable('tbl-desvios',10)">H/D Atual</th>
+            <th onclick="sortTable('tbl-desvios',11)">H/D Base</th>
+            <th onclick="sortTable('tbl-desvios',12)">Δ Horas</th>
+            <th onclick="sortTable('tbl-desvios',13)">Status</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -1015,6 +1082,7 @@ function aplicarFiltros(){
   if(abaAtiva === "acompanhamento") carregarAcompanhamento();
   if(abaAtiva === "qualidade") carregarQualidade();
   if(abaAtiva === "leituras") carregarLeituras();
+  if(abaAtiva === "desvios") carregarDesvios();
 }
 
 function limparFiltros(){
@@ -1482,6 +1550,297 @@ function renderizarLeituras(d, veioDeCache, salvoEm){
   }).join("");
 
   renderizarGraficosLeituras(rows);
+}
+
+// ======================================================
+// DESVIOS (vazão / produção / horas trabalhadas)
+// ======================================================
+
+let dadosDesviosBrutos = [];
+
+function formatarISO(d){
+  return d.toISOString().slice(0,10);
+}
+
+function obterPeriodoBase(){
+  const iniStr = document.getElementById("f-data-ini").value;
+  const fimStr = document.getElementById("f-data-fim").value;
+
+  if(iniStr && fimStr){
+    return {ini: iniStr, fim: fimStr};
+  }
+
+  // Sem filtro de data definido: usa os últimos 30 dias como período base.
+  const hoje = new Date();
+  const fim = new Date(hoje);
+  fim.setDate(fim.getDate() - 1);
+
+  const ini = new Date(fim);
+  ini.setDate(ini.getDate() - 29);
+
+  return {ini: formatarISO(ini), fim: formatarISO(fim)};
+}
+
+function diffDiasInclusive(iniStr,fimStr){
+  const ini = new Date(iniStr + "T00:00:00");
+  const fim = new Date(fimStr + "T00:00:00");
+  return Math.round((fim - ini) / 86400000) + 1;
+}
+
+function calcularPeriodoAnterior(base){
+  const dias = diffDiasInclusive(base.ini, base.fim);
+
+  const fimAnt = new Date(base.ini + "T00:00:00");
+  fimAnt.setDate(fimAnt.getDate() - 1);
+
+  const iniAnt = new Date(fimAnt);
+  iniAnt.setDate(iniAnt.getDate() - dias + 1);
+
+  return {ini: formatarISO(iniAnt), fim: formatarISO(fimAnt)};
+}
+
+function calcularPeriodoHistorico(base){
+  // Janela de 365 dias terminando no dia anterior ao início do período base,
+  // usada como "média histórica" do sistema.
+  const fimHist = new Date(base.ini + "T00:00:00");
+  fimHist.setDate(fimHist.getDate() - 1);
+
+  const iniHist = new Date(fimHist);
+  iniHist.setDate(iniHist.getDate() - 364);
+
+  return {ini: formatarISO(iniHist), fim: formatarISO(fimHist)};
+}
+
+function formatarDataBR(iso){
+  if(!iso) return "";
+  const p = iso.split("-");
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
+}
+
+function paramsComDatas(iniStr,fimStr){
+  const p = new URLSearchParams();
+
+  const add = (k,id) => {
+    const v = document.getElementById(id)?.value;
+    if(v) p.append(k,v);
+  };
+
+  add("gerencia","f-gerencia");
+  add("polo","f-polo");
+  add("cidade","f-cidade");
+  add("sistema","f-sistema");
+
+  if(iniStr) p.append("data_ini",iniStr);
+  if(fimStr) p.append("data_fim",fimStr);
+
+  return p.toString() ? "?" + p.toString() : "";
+}
+
+function chaveSistema(r){
+  return `${r.cidade || ""}|${r.sistema || ""}`.toLowerCase();
+}
+
+function mesclarDesvios(atual, base){
+  const mapaBase = new Map();
+  base.forEach(r => mapaBase.set(chaveSistema(r), r));
+
+  return atual.map(r => {
+    const b = mapaBase.get(chaveSistema(r)) || null;
+
+    return {
+      gerencia: r.gerencia,
+      polo: r.polo,
+      cidade: r.cidade,
+      sistema: r.sistema,
+      vazaoAtual: numNull(r.vazao_ls),
+      vazaoBase: b ? numNull(b.vazao_ls) : null,
+      producaoAtual: numNull(r.media_dia),
+      producaoBase: b ? numNull(b.media_dia) : null,
+      horasAtual: numNull(r.horas_dia),
+      horasBase: b ? numNull(b.horas_dia) : null
+    };
+  });
+}
+
+function variacaoPct(atual,base){
+  if(atual == null || base == null || base === 0) return null;
+  return ((atual - base) / base) * 100;
+}
+
+async function carregarDesvios(){
+  const tbody = document.querySelector("#tbl-desvios tbody");
+  const metodo = document.getElementById("desvio-metodo").value;
+  const base = obterPeriodoBase();
+
+  const baseline = metodo === "historico"
+    ? calcularPeriodoHistorico(base)
+    : calcularPeriodoAnterior(base);
+
+  document.getElementById("desvio-periodo-info").textContent =
+    `Período atual: ${formatarDataBR(base.ini)} a ${formatarDataBR(base.fim)} · Base de comparação: ${formatarDataBR(baseline.ini)} a ${formatarDataBR(baseline.fim)}`;
+
+  const chaveCache = `desvios_${metodo}_${base.ini}_${base.fim}_${params()}`;
+  const cacheado = lerCache(chaveCache);
+
+  if(cacheado?.dados){
+    dadosDesviosBrutos = cacheado.dados;
+    renderizarTabelaDesvios(true, cacheado.salvoEm);
+  }else{
+    tbody.innerHTML = "";
+    document.getElementById("count-desvios").textContent = "Carregando…";
+  }
+
+  try{
+    const [rAtual, rBase] = await Promise.all([
+      fetch(`${API}/producao${paramsComDatas(base.ini,base.fim)}`),
+      fetch(`${API}/producao${paramsComDatas(baseline.ini,baseline.fim)}`)
+    ]);
+
+    const dAtual = await rAtual.json();
+    const dBase = await rBase.json();
+
+    const linhasAtual = calcularCamposProducao(dAtual.rows || []);
+    const linhasBase = calcularCamposProducao(dBase.rows || []);
+
+    const merged = mesclarDesvios(linhasAtual, linhasBase);
+
+    dadosDesviosBrutos = merged;
+    salvarCache(chaveCache, merged);
+    renderizarTabelaDesvios(false, null);
+
+  }catch(e){
+    console.error("Erro desvios:",e);
+
+    if(!cacheado?.dados){
+      document.getElementById("count-desvios").textContent = "Erro ao carregar";
+    }else{
+      document.getElementById("count-desvios").textContent += " · dados salvos, sem conexão";
+    }
+  }
+}
+
+function fmtDelta(v){
+  if(v == null) return "—";
+
+  const cor = v <= -1 ? "var(--red)" : v >= 1 ? "var(--green)" : "var(--muted)";
+  const sinal = v > 0 ? "+" : "";
+
+  return `<span style="color:${cor}">${sinal}${v.toLocaleString("pt-BR",{maximumFractionDigits:1})}%</span>`;
+}
+
+function renderizarTabelaDesvios(veioDeCache, salvoEm){
+  const tbody = document.querySelector("#tbl-desvios tbody");
+  const limiarInput = document.getElementById("desvio-limiar");
+  const limiar = Math.max(1, Number(limiarInput.value) || 15);
+
+  const linhas = dadosDesviosBrutos.map(r => {
+    const deltaVazao = variacaoPct(r.vazaoAtual, r.vazaoBase);
+    const deltaProducao = variacaoPct(r.producaoAtual, r.producaoBase);
+    const deltaHoras = variacaoPct(r.horasAtual, r.horasBase);
+
+    const deltas = [deltaVazao,deltaProducao,deltaHoras].filter(v => v != null);
+    const pior = deltas.length ? Math.min(...deltas) : null;
+
+    // Sinal de possível vazamento: vazão e/ou produção subiram significativamente
+    // sem que as horas trabalhadas tenham subido de forma equivalente — ou seja,
+    // mais água passando pelo sistema sem motivo operacional (mais tempo bombeando).
+    const subidaVazaoOuProducao = Math.max(
+      deltaVazao != null ? deltaVazao : -Infinity,
+      deltaProducao != null ? deltaProducao : -Infinity
+    );
+
+    const horasEstavelOuMenor = deltaHoras == null || deltaHoras < limiar;
+
+    const suspeitaVazamento =
+      subidaVazaoOuProducao !== -Infinity &&
+      subidaVazaoOuProducao >= limiar &&
+      horasEstavelOuMenor;
+
+    let status, classe;
+
+    if(pior == null && subidaVazaoOuProducao === -Infinity){
+      status = "Sem dados p/ comparar"; classe = "badge-blue";
+    }else if(pior != null && pior <= -limiar){
+      status = "Possível perda"; classe = "badge-red";
+    }else if(suspeitaVazamento){
+      status = "Possível vazamento"; classe = "badge-purple";
+    }else if(pior != null && pior <= -limiar/2){
+      status = "Atenção"; classe = "badge-yellow";
+    }else{
+      status = "Estável"; classe = "badge-green";
+    }
+
+    return {...r, deltaVazao, deltaProducao, deltaHoras, pior, subidaVazaoOuProducao, status, classe};
+  });
+
+  linhas.sort((a,b) => {
+    const pa = a.pior == null ? 999 : a.pior;
+    const pb = b.pior == null ? 999 : b.pior;
+    return pa - pb;
+  });
+
+  document.getElementById("count-desvios").textContent =
+    `${linhas.length} sistemas` + (veioDeCache ? ` · dados salvos ${idadeCacheTexto(salvoEm)}` : "");
+
+  tbody.innerHTML = linhas.map(r => `
+    <tr>
+      <td>${escapeHtml(r.gerencia || "")}</td>
+      <td>${escapeHtml(r.polo || "")}</td>
+      <td>${escapeHtml(r.cidade || "")}</td>
+      <td>${escapeHtml(r.sistema || "")}</td>
+      <td>${r.vazaoAtual != null ? fmt4(r.vazaoAtual) : "—"}</td>
+      <td>${r.vazaoBase != null ? fmt4(r.vazaoBase) : "—"}</td>
+      <td>${fmtDelta(r.deltaVazao)}</td>
+      <td>${r.producaoAtual != null ? fmt2(r.producaoAtual) : "—"}</td>
+      <td>${r.producaoBase != null ? fmt2(r.producaoBase) : "—"}</td>
+      <td>${fmtDelta(r.deltaProducao)}</td>
+      <td>${r.horasAtual != null ? fmt2(r.horasAtual) : "—"}</td>
+      <td>${r.horasBase != null ? fmt2(r.horasBase) : "—"}</td>
+      <td>${fmtDelta(r.deltaHoras)}</td>
+      <td><span class="badge ${r.classe}" title="${r.status === 'Possível vazamento' ? 'Vazão/produção subiu sem aumento equivalente nas horas trabalhadas' : ''}">${escapeHtml(r.status)}</span></td>
+    </tr>
+  `).join("");
+
+  renderizarGraficoDesvios(linhas);
+}
+
+function renderizarGraficoDesvios(linhas){
+  const piores = linhas
+    .filter(r => r.pior != null && r.pior < 0)
+    .slice(0,10)
+    .map(r => ({
+      label: labelSistema(r),
+      value: Math.abs(r.pior),
+      unit: "% de queda"
+    }));
+
+  criarBarChart(
+    "chart-desvios",
+    piores,
+    {
+      color:"#ef4444",
+      fmt: v => v.toLocaleString("pt-BR",{maximumFractionDigits:1}) + "%"
+    }
+  );
+
+  const maioresAltas = linhas
+    .filter(r => r.subidaVazaoOuProducao != null && r.subidaVazaoOuProducao !== -Infinity && r.subidaVazaoOuProducao > 0)
+    .sort((a,b) => b.subidaVazaoOuProducao - a.subidaVazaoOuProducao)
+    .slice(0,10)
+    .map(r => ({
+      label: labelSistema(r),
+      value: r.subidaVazaoOuProducao,
+      unit: "% de alta"
+    }));
+
+  criarBarChart(
+    "chart-desvios-alta",
+    maioresAltas,
+    {
+      color:"#8b5cf6",
+      fmt: v => v.toLocaleString("pt-BR",{maximumFractionDigits:1}) + "%"
+    }
+  );
 }
 
 // ======================================================
