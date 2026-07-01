@@ -734,6 +734,78 @@ let abaAtiva = "producao";
 let combinacoesFiltros = [];
 let ultimaQualidade = null;
 
+// ======================================================
+// CACHE LOCAL (localStorage)
+// ======================================================
+
+const CACHE_PREFIXO = "oasa_cache_";
+const CACHE_VERSAO = "v1";
+const FILTROS_KEY = "oasa_filtros_salvos";
+
+function cacheChave(nome){
+  return `${CACHE_PREFIXO}${CACHE_VERSAO}_${nome}`;
+}
+
+function salvarCache(nome, dados){
+  try{
+    localStorage.setItem(cacheChave(nome), JSON.stringify({
+      dados,
+      salvoEm: Date.now()
+    }));
+  }catch(e){
+    console.warn("Não foi possível salvar cache:", nome, e);
+  }
+}
+
+function lerCache(nome){
+  try{
+    const bruto = localStorage.getItem(cacheChave(nome));
+    if(!bruto) return null;
+    return JSON.parse(bruto);
+  }catch(e){
+    console.warn("Não foi possível ler cache:", nome, e);
+    return null;
+  }
+}
+
+function idadeCacheTexto(salvoEm){
+  if(!salvoEm) return "";
+  const segundos = Math.floor((Date.now() - salvoEm) / 1000);
+
+  if(segundos < 60) return "agora há pouco";
+  if(segundos < 3600) return `há ${Math.floor(segundos/60)} min`;
+  if(segundos < 86400) return `há ${Math.floor(segundos/3600)} h`;
+  return `há ${Math.floor(segundos/86400)} dia(s)`;
+}
+
+function salvarFiltrosNoStorage(){
+  try{
+    const filtros = {
+      gerencia: document.getElementById("f-gerencia")?.value || "",
+      polo: document.getElementById("f-polo")?.value || "",
+      cidade: document.getElementById("f-cidade")?.value || "",
+      sistema: document.getElementById("f-sistema")?.value || "",
+      dataIni: document.getElementById("f-data-ini")?.value || "",
+      dataFim: document.getElementById("f-data-fim")?.value || "",
+      abaAtiva
+    };
+
+    localStorage.setItem(FILTROS_KEY, JSON.stringify(filtros));
+  }catch(e){
+    console.warn("Não foi possível salvar filtros:", e);
+  }
+}
+
+function lerFiltrosSalvos(){
+  try{
+    const bruto = localStorage.getItem(FILTROS_KEY);
+    return bruto ? JSON.parse(bruto) : null;
+  }catch(e){
+    console.warn("Não foi possível ler filtros salvos:", e);
+    return null;
+  }
+}
+
 const MAPA_QUALIDADE = [
   {key:"cloro", label:"Cloro Residual Livre", unidade:"mg/L", limite:"≤ 5,0"},
   {key:"turbidez", label:"Turbidez", unidade:"uT", limite:"≤ 1,0"},
@@ -746,9 +818,64 @@ const MAPA_QUALIDADE = [
 // ======================================================
 
 async function init(){
+  restaurarFiltrosSalvos();
   await carregarFiltros();
   await carregarStatus();
   await carregarProducao();
+}
+
+function restaurarFiltrosSalvos(){
+  const salvos = lerFiltrosSalvos();
+  if(!salvos) return;
+
+  // Restaura a última aba ativa
+  if(salvos.abaAtiva && salvos.abaAtiva !== "producao"){
+    const tabEl = Array.from(document.querySelectorAll(".tab"))
+      .find(t => t.getAttribute("onclick")?.includes(`'${salvos.abaAtiva}'`));
+
+    if(tabEl){
+      abaAtiva = salvos.abaAtiva;
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+      tabEl.classList.add("active");
+      document.getElementById("aba-" + salvos.abaAtiva)?.classList.add("active");
+    }
+  }
+
+  // Restaura valores de data (não dependem da cascata carregada da API)
+  if(salvos.dataIni) document.getElementById("f-data-ini").value = salvos.dataIni;
+  if(salvos.dataFim) document.getElementById("f-data-fim").value = salvos.dataFim;
+
+  // Gerência/Pólo/Cidade/Sistema dependem das opções carregadas via /filtros,
+  // então guardamos e aplicamos assim que os <select> forem preenchidos.
+  window._filtrosPendentes = {
+    gerencia: salvos.gerencia || "",
+    polo: salvos.polo || "",
+    cidade: salvos.cidade || "",
+    sistema: salvos.sistema || ""
+  };
+}
+
+function aplicarFiltrosPendentesNosSelects(){
+  const pend = window._filtrosPendentes;
+  if(!pend) return;
+
+  if(pend.gerencia) document.getElementById("f-gerencia").value = pend.gerencia;
+  atualizarCascata("gerencia");
+
+  if(pend.polo){
+    document.getElementById("f-polo").value = pend.polo;
+    atualizarCascata("polo");
+  }
+
+  if(pend.cidade){
+    document.getElementById("f-cidade").value = pend.cidade;
+    atualizarCascata("cidade");
+  }
+
+  if(pend.sistema) document.getElementById("f-sistema").value = pend.sistema;
+
+  window._filtrosPendentes = null;
 }
 
 async function carregarStatus(){
@@ -761,24 +888,44 @@ async function carregarStatus(){
       `${d.cache?.linhas?.toLocaleString("pt-BR") ?? "?"} registros · atualizado há ${d.cache?.idade_segundos ?? "?"}s`;
   }catch(e){
     console.error("Erro status:",e);
-    document.getElementById("header-info").textContent = "Erro ao conectar";
+    document.getElementById("status-dot").className = "";
+    document.getElementById("header-info").textContent = "Sem conexão — exibindo dados salvos no navegador";
   }
 }
 
 async function carregarFiltros(){
+  // 1) Mostra cache local imediatamente, se existir
+  const cacheado = lerCache("filtros");
+  if(cacheado?.dados){
+    aplicarDadosFiltros(cacheado.dados);
+    aplicarFiltrosPendentesNosSelects();
+  }
+
+  // 2) Busca versão atual da API e substitui
   try{
     const r = await fetch(`${API}/filtros`);
     const d = await r.json();
 
-    combinacoesFiltros = d.combinacoes || [];
+    aplicarDadosFiltros(d);
+    salvarCache("filtros", d);
 
-    preencherSelect("f-gerencia", d.gerencias || []);
-    preencherSelect("f-polo", d.polos || []);
-    preencherSelect("f-cidade", d.cidades || []);
-    preencherSelect("f-sistema", d.sistemas || []);
+    // Só reaplica pendentes aqui se não havia cache (senão já foi aplicado acima)
+    if(!cacheado?.dados) aplicarFiltrosPendentesNosSelects();
   }catch(e){
     console.error("Erro filtros:",e);
+    if(!cacheado?.dados){
+      document.getElementById("header-info").textContent = "Erro ao conectar — sem cache disponível";
+    }
   }
+}
+
+function aplicarDadosFiltros(d){
+  combinacoesFiltros = d.combinacoes || [];
+
+  preencherSelect("f-gerencia", d.gerencias || []);
+  preencherSelect("f-polo", d.polos || []);
+  preencherSelect("f-cidade", d.cidades || []);
+  preencherSelect("f-sistema", d.sistemas || []);
 }
 
 function preencherSelect(id, lista){
@@ -862,6 +1009,7 @@ function params(){
 }
 
 function aplicarFiltros(){
+  salvarFiltrosNoStorage();
   if(abaAtiva === "producao") carregarProducao();
   if(abaAtiva === "acompanhamento") carregarAcompanhamento();
   if(abaAtiva === "qualidade") carregarQualidade();
@@ -879,6 +1027,7 @@ function limparFiltros(){
   preencherSelect("f-cidade",[...new Set(combinacoesFiltros.map(x => x["Cidade"]).filter(Boolean))]);
   preencherSelect("f-sistema",[...new Set(combinacoesFiltros.map(x => x["Sistema"]).filter(Boolean))]);
 
+  localStorage.removeItem(FILTROS_KEY);
   aplicarFiltros();
 }
 
@@ -891,6 +1040,7 @@ function mudarAba(nome,el){
   el.classList.add("active");
   document.getElementById("aba-" + nome).classList.add("active");
 
+  salvarFiltrosNoStorage();
   aplicarFiltros();
 }
 
@@ -901,103 +1051,123 @@ function mudarAba(nome,el){
 async function carregarProducao(){
   const cards = document.getElementById("cards-producao");
   const tbody = document.querySelector("#tbl-producao tbody");
+  const chaveCache = "producao_" + params();
 
-  cards.innerHTML = `<div class="loading"><span class="spinner"></span>Carregando produção…</div>`;
-  tbody.innerHTML = "";
+  const cacheado = lerCache(chaveCache);
+
+  if(cacheado?.dados){
+    renderizarProducao(cacheado.dados, true, cacheado.salvoEm);
+  }else{
+    cards.innerHTML = `<div class="loading"><span class="spinner"></span>Carregando produção…</div>`;
+    tbody.innerHTML = "";
+  }
 
   try{
     const r = await fetch(`${API}/producao${params()}`);
     const d = await r.json();
 
-    let rows = d.rows || [];
-    rows = calcularCamposProducao(rows);
-
-    const totais = rows.reduce((a,r) => {
-      a.producaoMes += num(r.producao_mes);
-      a.mediaDia += num(r.media_dia);
-      a.vazaoM3h += num(r.vazao_m3h);
-      a.vazaoLs += num(r.vazao_ls);
-      a.horasDia += num(r.horas_dia);
-      a.horasMes += num(r.horas_mes);
-      return a;
-    },{
-      producaoMes:0,
-      mediaDia:0,
-      vazaoM3h:0,
-      vazaoLs:0,
-      horasDia:0,
-      horasMes:0
-    });
-
-    cards.innerHTML = `
-      <div class="card c-blue">
-        <div class="label">Produção Mês</div>
-        <div class="value">${fmt(totais.producaoMes)}</div>
-        <div class="sub">m³ projetado</div>
-      </div>
-
-      <div class="card c-green">
-        <div class="label">Média Diária</div>
-        <div class="value">${fmt(totais.mediaDia)}</div>
-        <div class="sub">m³/dia</div>
-      </div>
-
-      <div class="card c-yellow">
-        <div class="label">Vazão Média</div>
-        <div class="value">${fmt2(totais.vazaoM3h)}</div>
-        <div class="sub">m³/h</div>
-      </div>
-
-      <div class="card c-teal">
-        <div class="label">Vazão Média</div>
-        <div class="value">${fmt4(totais.vazaoLs)}</div>
-        <div class="sub">L/s</div>
-      </div>
-
-      <div class="card c-purple">
-        <div class="label">Horas Média Dia</div>
-        <div class="value">${fmt2(totais.horasDia)}</div>
-        <div class="sub">H/D pelo horímetro</div>
-      </div>
-
-      <div class="card c-red">
-        <div class="label">Projeção Horas Mês</div>
-        <div class="value">${fmt2(totais.horasMes)}</div>
-        <div class="sub">horas totais mês</div>
-      </div>
-    `;
-
-    document.getElementById("count-producao").textContent = `${rows.length} sistemas`;
-
-    tbody.innerHTML = rows.map(r => `
-      <tr>
-        <td>${escapeHtml(r.gerencia || "")}</td>
-        <td>${escapeHtml(r.polo || "")}</td>
-        <td>${escapeHtml(r.cidade || "")}</td>
-        <td>${escapeHtml(r.sistema || "")}</td>
-        <td>${r.producao_mes != null ? fmt(r.producao_mes) : "—"}</td>
-        <td>${r.horas_mes != null ? fmt2(r.horas_mes) : "—"}</td>
-        <td>${r.media_dia != null ? fmt2(r.media_dia) : "—"}</td>
-        <td>${r.vazao_ls != null ? fmt4(r.vazao_ls) : "—"}</td>
-        <td>${r.horas_dia != null ? fmt2(r.horas_dia) : "—"}</td>
-      </tr>
-    `).join("");
-
-    renderizarGraficosProducao(rows);
+    salvarCache(chaveCache, d);
+    renderizarProducao(d, false, null);
 
   }catch(e){
     console.error("Erro produção:",e);
 
-    cards.innerHTML = `
-      <div class="card c-red">
-        <div class="label">Erro</div>
-        <div class="value">Falha</div>
-        <div class="sub">Não foi possível carregar produção</div>
-      </div>
-    `;
+    if(!cacheado?.dados){
+      cards.innerHTML = `
+        <div class="card c-red">
+          <div class="label">Erro</div>
+          <div class="value">Falha</div>
+          <div class="sub">Não foi possível carregar produção</div>
+        </div>
+      `;
 
-    document.getElementById("count-producao").textContent = "Erro ao carregar";
+      document.getElementById("count-producao").textContent = "Erro ao carregar";
+    }else{
+      document.getElementById("count-producao").textContent += " · dados salvos, sem conexão";
+    }
   }
+}
+
+function renderizarProducao(d, veioDeCache, salvoEm){
+  const cards = document.getElementById("cards-producao");
+  const tbody = document.querySelector("#tbl-producao tbody");
+
+  let rows = d.rows || [];
+  rows = calcularCamposProducao(rows);
+
+  const totais = rows.reduce((a,r) => {
+    a.producaoMes += num(r.producao_mes);
+    a.mediaDia += num(r.media_dia);
+    a.vazaoM3h += num(r.vazao_m3h);
+    a.vazaoLs += num(r.vazao_ls);
+    a.horasDia += num(r.horas_dia);
+    a.horasMes += num(r.horas_mes);
+    return a;
+  },{
+    producaoMes:0,
+    mediaDia:0,
+    vazaoM3h:0,
+    vazaoLs:0,
+    horasDia:0,
+    horasMes:0
+  });
+
+  cards.innerHTML = `
+    <div class="card c-blue">
+      <div class="label">Produção Mês</div>
+      <div class="value">${fmt(totais.producaoMes)}</div>
+      <div class="sub">m³ projetado</div>
+    </div>
+
+    <div class="card c-green">
+      <div class="label">Média Diária</div>
+      <div class="value">${fmt(totais.mediaDia)}</div>
+      <div class="sub">m³/dia</div>
+    </div>
+
+    <div class="card c-yellow">
+      <div class="label">Vazão Média</div>
+      <div class="value">${fmt2(totais.vazaoM3h)}</div>
+      <div class="sub">m³/h</div>
+    </div>
+
+    <div class="card c-teal">
+      <div class="label">Vazão Média</div>
+      <div class="value">${fmt4(totais.vazaoLs)}</div>
+      <div class="sub">L/s</div>
+    </div>
+
+    <div class="card c-purple">
+      <div class="label">Horas Média Dia</div>
+      <div class="value">${fmt2(totais.horasDia)}</div>
+      <div class="sub">H/D pelo horímetro</div>
+    </div>
+
+    <div class="card c-red">
+      <div class="label">Projeção Horas Mês</div>
+      <div class="value">${fmt2(totais.horasMes)}</div>
+      <div class="sub">horas totais mês</div>
+    </div>
+  `;
+
+  document.getElementById("count-producao").textContent =
+    `${rows.length} sistemas` + (veioDeCache ? ` · dados salvos ${idadeCacheTexto(salvoEm)}` : "");
+
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(r.gerencia || "")}</td>
+      <td>${escapeHtml(r.polo || "")}</td>
+      <td>${escapeHtml(r.cidade || "")}</td>
+      <td>${escapeHtml(r.sistema || "")}</td>
+      <td>${r.producao_mes != null ? fmt(r.producao_mes) : "—"}</td>
+      <td>${r.horas_mes != null ? fmt2(r.horas_mes) : "—"}</td>
+      <td>${r.media_dia != null ? fmt2(r.media_dia) : "—"}</td>
+      <td>${r.vazao_ls != null ? fmt4(r.vazao_ls) : "—"}</td>
+      <td>${r.horas_dia != null ? fmt2(r.horas_dia) : "—"}</td>
+    </tr>
+  `).join("");
+
+  renderizarGraficosProducao(rows);
 }
 
 function calcularCamposProducao(rows){
@@ -1075,43 +1245,58 @@ function diasNoMesReferencia(){
 // ======================================================
 
 async function carregarAcompanhamento(){
+  const chaveCache = "acompanhamento_" + params();
+  const cacheado = lerCache(chaveCache);
+
+  if(cacheado?.dados) renderizarAcompanhamento(cacheado.dados, true, cacheado.salvoEm);
+
   try{
     const r = await fetch(`${API}/acompanhamento${params()}`);
     const d = await r.json();
-    const rows = d.rows || [];
 
-    document.getElementById("count-acomp").textContent = `${rows.length} sistemas`;
-
-    const tbody = document.querySelector("#tbl-acomp tbody");
-
-    tbody.innerHTML = rows.map(row => {
-      const rankClass = row.rank === 1 ? "rank-1" : row.rank <= 5 ? "rank-2" : "rank-ok";
-
-      const status = row.analises === 0
-        ? `<span class="badge badge-red">Sem análise</span>`
-        : row.analises < 3
-        ? `<span class="badge badge-yellow">Poucas análises</span>`
-        : `<span class="badge badge-green">Regular</span>`;
-
-      return `
-        <tr>
-          <td class="${rankClass}">#${row.rank}</td>
-          <td>${escapeHtml(row.gerencia || "")}</td>
-          <td>${escapeHtml(row.polo || "")}</td>
-          <td>${escapeHtml(row.cidade || "")}</td>
-          <td>${escapeHtml(row.sistema || "")}</td>
-          <td>${row.analises ?? 0}</td>
-          <td>${row.leituras ?? 0}</td>
-          <td>${status}</td>
-        </tr>
-      `;
-    }).join("");
-
-    renderizarGraficosAcompanhamento(rows);
+    salvarCache(chaveCache, d);
+    renderizarAcompanhamento(d, false, null);
 
   }catch(e){
     console.error("Erro acompanhamento:",e);
+    if(cacheado?.dados){
+      document.getElementById("count-acomp").textContent += " · dados salvos, sem conexão";
+    }
   }
+}
+
+function renderizarAcompanhamento(d, veioDeCache, salvoEm){
+  const rows = d.rows || [];
+
+  document.getElementById("count-acomp").textContent =
+    `${rows.length} sistemas` + (veioDeCache ? ` · dados salvos ${idadeCacheTexto(salvoEm)}` : "");
+
+  const tbody = document.querySelector("#tbl-acomp tbody");
+
+  tbody.innerHTML = rows.map(row => {
+    const rankClass = row.rank === 1 ? "rank-1" : row.rank <= 5 ? "rank-2" : "rank-ok";
+
+    const status = row.analises === 0
+      ? `<span class="badge badge-red">Sem análise</span>`
+      : row.analises < 3
+      ? `<span class="badge badge-yellow">Poucas análises</span>`
+      : `<span class="badge badge-green">Regular</span>`;
+
+    return `
+      <tr>
+        <td class="${rankClass}">#${row.rank}</td>
+        <td>${escapeHtml(row.gerencia || "")}</td>
+        <td>${escapeHtml(row.polo || "")}</td>
+        <td>${escapeHtml(row.cidade || "")}</td>
+        <td>${escapeHtml(row.sistema || "")}</td>
+        <td>${row.analises ?? 0}</td>
+        <td>${row.leituras ?? 0}</td>
+        <td>${status}</td>
+      </tr>
+    `;
+  }).join("");
+
+  renderizarGraficosAcompanhamento(rows);
 }
 
 // ======================================================
@@ -1119,46 +1304,67 @@ async function carregarAcompanhamento(){
 // ======================================================
 
 async function carregarQualidade(){
+  const chaveCache = "qualidade_" + params();
+  const cacheado = lerCache(chaveCache);
+
+  if(cacheado?.dados) renderizarQualidade(cacheado.dados, true, cacheado.salvoEm);
+
   try{
     const r = await fetch(`${API}/qualidade${params()}`);
     const d = await r.json();
 
-    ultimaQualidade = d;
-
-    const params_q = [
-      {...MAPA_QUALIDADE[0], cor:"#3b82f6"},
-      {...MAPA_QUALIDADE[1], cor:"#8b5cf6"},
-      {...MAPA_QUALIDADE[2], cor:"#f59e0b"},
-      {...MAPA_QUALIDADE[3], cor:"#14b8a6"}
-    ];
-
-    document.getElementById("qual-grid").innerHTML = params_q.map(p => {
-      const q = d[p.key] || {};
-      const total = q.total || 0;
-      const adeq = q.adequado || 0;
-      const inad = q.inadequado || 0;
-      const pct = total > 0 ? Math.round(adeq / total * 100) : 0;
-
-      return `
-        <div class="qual-card">
-          <h3>${p.label} <span style="color:var(--muted);font-weight:400;font-size:11px">(${p.limite} ${p.unidade})</span></h3>
-          <div style="font-size:28px;font-weight:700;color:${pct >= 80 ? "var(--green)" : pct >= 60 ? "var(--yellow)" : "var(--red)"}">${pct}%</div>
-          <div class="qual-bar"><div class="qual-bar-fill" style="width:${pct}%;background:${p.cor}"></div></div>
-          <div class="qual-row">
-            <span>Adequado: ${adeq}</span>
-            <span>Inadequado: ${inad}</span>
-            <span>Total: ${total}</span>
-          </div>
-          ${p.key === "cloro" && q.abaixo_min ? `<div style="font-size:11px;color:var(--red);margin-top:6px">⚠ ${q.abaixo_min} abaixo do mínimo (&lt; 0,2 mg/L)</div>` : ""}
-        </div>
-      `;
-    }).join("");
-
-    renderizarGraficosQualidade(d);
+    salvarCache(chaveCache, d);
+    renderizarQualidade(d, false, null);
 
   }catch(e){
     console.error("Erro qualidade:",e);
+    if(cacheado?.dados){
+      const el = document.getElementById("count-qualidade");
+      if(el) el.textContent = `Resumo de qualidade · dados salvos, sem conexão`;
+    }
   }
+}
+
+function renderizarQualidade(d, veioDeCache, salvoEm){
+  ultimaQualidade = d;
+
+  const contagemEl = document.getElementById("count-qualidade");
+  if(contagemEl){
+    contagemEl.textContent = veioDeCache
+      ? `Resumo de qualidade · dados salvos ${idadeCacheTexto(salvoEm)}`
+      : "Resumo de qualidade";
+  }
+
+  const params_q = [
+    {...MAPA_QUALIDADE[0], cor:"#3b82f6"},
+    {...MAPA_QUALIDADE[1], cor:"#8b5cf6"},
+    {...MAPA_QUALIDADE[2], cor:"#f59e0b"},
+    {...MAPA_QUALIDADE[3], cor:"#14b8a6"}
+  ];
+
+  document.getElementById("qual-grid").innerHTML = params_q.map(p => {
+    const q = d[p.key] || {};
+    const total = q.total || 0;
+    const adeq = q.adequado || 0;
+    const inad = q.inadequado || 0;
+    const pct = total > 0 ? Math.round(adeq / total * 100) : 0;
+
+    return `
+      <div class="qual-card">
+        <h3>${p.label} <span style="color:var(--muted);font-weight:400;font-size:11px">(${p.limite} ${p.unidade})</span></h3>
+        <div style="font-size:28px;font-weight:700;color:${pct >= 80 ? "var(--green)" : pct >= 60 ? "var(--yellow)" : "var(--red)"}">${pct}%</div>
+        <div class="qual-bar"><div class="qual-bar-fill" style="width:${pct}%;background:${p.cor}"></div></div>
+        <div class="qual-row">
+          <span>Adequado: ${adeq}</span>
+          <span>Inadequado: ${inad}</span>
+          <span>Total: ${total}</span>
+        </div>
+        ${p.key === "cloro" && q.abaixo_min ? `<div style="font-size:11px;color:var(--red);margin-top:6px">⚠ ${q.abaixo_min} abaixo do mínimo (&lt; 0,2 mg/L)</div>` : ""}
+      </div>
+    `;
+  }).join("");
+
+  renderizarGraficosQualidade(d);
 }
 
 // ======================================================
@@ -1166,58 +1372,73 @@ async function carregarQualidade(){
 // ======================================================
 
 async function carregarLeituras(){
+  const p = new URLSearchParams();
+
+  const add = (k,id) => {
+    const v = document.getElementById(id)?.value;
+    if(v) p.append(k,v);
+  };
+
+  add("cidade","f-cidade");
+  add("sistema","f-sistema");
+  add("data_ini","f-data-ini");
+  add("data_fim","f-data-fim");
+
+  const query = p.toString() ? `?${p.toString()}` : "";
+  const chaveCache = "leituras_" + query;
+  const cacheado = lerCache(chaveCache);
+
+  if(cacheado?.dados) renderizarLeituras(cacheado.dados, true, cacheado.salvoEm);
+
   try{
-    const p = new URLSearchParams();
-
-    const add = (k,id) => {
-      const v = document.getElementById(id)?.value;
-      if(v) p.append(k,v);
-    };
-
-    add("cidade","f-cidade");
-    add("sistema","f-sistema");
-    add("data_ini","f-data-ini");
-    add("data_fim","f-data-fim");
-
-    const query = p.toString() ? `?${p.toString()}` : "";
     const r = await fetch(`${API}/leituras${query}`);
     const d = await r.json();
-    const rows = d.rows || [];
 
-    document.getElementById("count-leit").textContent = `${rows.length} registros`;
-
-    const tbody = document.querySelector("#tbl-leit tbody");
-
-    tbody.innerHTML = rows.map(row => {
-      const tipo = row.Tem_Analise && row.Tem_Leitura_Macro
-        ? `<span class="badge badge-blue">Ambos</span>`
-        : row.Tem_Analise
-        ? `<span class="badge badge-green">Análise</span>`
-        : `<span class="badge badge-yellow">Leitura</span>`;
-
-      return `
-        <tr>
-          <td>${escapeHtml(row.Data_Hora_Exibicao || "")}</td>
-          <td>${escapeHtml(row.Cidade || "")}</td>
-          <td>${escapeHtml(row.Sistema || "")}</td>
-          <td>${row.ME_Num != null ? fmt(row.ME_Num) : "—"}</td>
-          <td>${row.MS_Num != null ? fmt(row.MS_Num) : "—"}</td>
-          <td>${row.Horimetro_Num != null ? fmt(row.Horimetro_Num) : "—"}</td>
-          <td>${row["Cloro (mg/L)"] != null ? fmt2(row["Cloro (mg/L)"]) : "—"}</td>
-          <td>${row["Turbidez (uT)"] != null ? fmt2(row["Turbidez (uT)"]) : "—"}</td>
-          <td>${row["Cor (uH)"] != null ? fmt2(row["Cor (uH)"]) : "—"}</td>
-          <td>${row["Fluoreto (mg/L)"] != null ? fmt2(row["Fluoreto (mg/L)"]) : "—"}</td>
-          <td>${row.Producao != null ? fmt(row.Producao) : "—"}</td>
-          <td>${tipo}</td>
-        </tr>
-      `;
-    }).join("");
-
-    renderizarGraficosLeituras(rows);
+    salvarCache(chaveCache, d);
+    renderizarLeituras(d, false, null);
 
   }catch(e){
     console.error("Erro leituras:",e);
+    if(cacheado?.dados){
+      document.getElementById("count-leit").textContent += " · dados salvos, sem conexão";
+    }
   }
+}
+
+function renderizarLeituras(d, veioDeCache, salvoEm){
+  const rows = d.rows || [];
+
+  document.getElementById("count-leit").textContent =
+    `${rows.length} registros` + (veioDeCache ? ` · dados salvos ${idadeCacheTexto(salvoEm)}` : "");
+
+  const tbody = document.querySelector("#tbl-leit tbody");
+
+  tbody.innerHTML = rows.map(row => {
+    const tipo = row.Tem_Analise && row.Tem_Leitura_Macro
+      ? `<span class="badge badge-blue">Ambos</span>`
+      : row.Tem_Analise
+      ? `<span class="badge badge-green">Análise</span>`
+      : `<span class="badge badge-yellow">Leitura</span>`;
+
+    return `
+      <tr>
+        <td>${escapeHtml(row.Data_Hora_Exibicao || "")}</td>
+        <td>${escapeHtml(row.Cidade || "")}</td>
+        <td>${escapeHtml(row.Sistema || "")}</td>
+        <td>${row.ME_Num != null ? fmt(row.ME_Num) : "—"}</td>
+        <td>${row.MS_Num != null ? fmt(row.MS_Num) : "—"}</td>
+        <td>${row.Horimetro_Num != null ? fmt(row.Horimetro_Num) : "—"}</td>
+        <td>${row["Cloro (mg/L)"] != null ? fmt2(row["Cloro (mg/L)"]) : "—"}</td>
+        <td>${row["Turbidez (uT)"] != null ? fmt2(row["Turbidez (uT)"]) : "—"}</td>
+        <td>${row["Cor (uH)"] != null ? fmt2(row["Cor (uH)"]) : "—"}</td>
+        <td>${row["Fluoreto (mg/L)"] != null ? fmt2(row["Fluoreto (mg/L)"]) : "—"}</td>
+        <td>${row.Producao != null ? fmt(row.Producao) : "—"}</td>
+        <td>${tipo}</td>
+      </tr>
+    `;
+  }).join("");
+
+  renderizarGraficosLeituras(rows);
 }
 
 // ======================================================
