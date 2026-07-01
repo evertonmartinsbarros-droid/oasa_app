@@ -727,8 +727,12 @@ tr:hover td{background:var(--surface2)}
       <label>Comparar com
         <select id="desvio-metodo" onchange="carregarDesvios()">
           <option value="anterior">Período anterior equivalente</option>
-          <option value="historico">Média histórica do sistema</option>
+          <option value="historico">Mediana histórica robusta</option>
         </select>
+      </label>
+
+      <label>Nº de períodos históricos
+        <input type="number" id="desvio-qtd-periodos" value="12" min="4" max="24" step="1" onchange="carregarDesvios()">
       </label>
 
       <label>Limiar de queda (%)
@@ -1599,16 +1603,25 @@ function calcularPeriodoAnterior(base){
   return {ini: formatarISO(iniAnt), fim: formatarISO(fimAnt)};
 }
 
-function calcularPeriodoHistorico(base){
-  // Janela de 365 dias terminando no dia anterior ao início do período base,
-  // usada como "média histórica" do sistema.
-  const fimHist = new Date(base.ini + "T00:00:00");
-  fimHist.setDate(fimHist.getDate() - 1);
+function gerarJanelasHistoricas(base, qtd){
+  const dias = diffDiasInclusive(base.ini, base.fim);
+  const janelas = [];
 
-  const iniHist = new Date(fimHist);
-  iniHist.setDate(iniHist.getDate() - 364);
+  let fimAtual = new Date(base.ini + "T00:00:00");
+  fimAtual.setDate(fimAtual.getDate() - 1);
 
-  return {ini: formatarISO(iniHist), fim: formatarISO(fimHist)};
+  for(let i = 0; i < qtd; i++){
+    const fim = new Date(fimAtual);
+    const ini = new Date(fim);
+    ini.setDate(ini.getDate() - dias + 1);
+
+    janelas.push({ini: formatarISO(ini), fim: formatarISO(fim)});
+
+    fimAtual = new Date(ini);
+    fimAtual.setDate(fimAtual.getDate() - 1);
+  }
+
+  return janelas;
 }
 
 function formatarDataBR(iso){
@@ -1667,19 +1680,130 @@ function variacaoPct(atual,base){
   return ((atual - base) / base) * 100;
 }
 
+function percentil(ordenado,p){
+  if(!ordenado.length) return null;
+
+  const idx = (ordenado.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+
+  if(lo === hi) return ordenado[lo];
+  return ordenado[lo] + (ordenado[hi] - ordenado[lo]) * (idx - lo);
+}
+
+function mediana(valores){
+  if(!valores.length) return null;
+
+  const v = valores.slice().sort((a,b) => a - b);
+  const n = v.length;
+  const meio = Math.floor(n / 2);
+
+  return n % 2 !== 0 ? v[meio] : (v[meio - 1] + v[meio]) / 2;
+}
+
+// Remove valores fora de [Q1 - 1.5*IQR, Q3 + 1.5*IQR] — descarta leituras
+// muito discrepantes (erro de digitação, troca de medidor no meio da série).
+function removerOutliersIQR(valores){
+  if(valores.length < 4) return valores.slice();
+
+  const v = valores.slice().sort((a,b) => a - b);
+  const q1 = percentil(v,0.25);
+  const q3 = percentil(v,0.75);
+  const iqr = q3 - q1;
+  const min = q1 - 1.5 * iqr;
+  const max = q3 + 1.5 * iqr;
+
+  const filtrado = v.filter(x => x >= min && x <= max);
+
+  // Se o filtro removeu tudo (IQR = 0, valores idênticos com 1 outlier extremo),
+  // mantém os originais para não ficar sem base de comparação.
+  return filtrado.length ? filtrado : v;
+}
+
+function medianaRobusta(valores){
+  const limpos = valores.filter(v => v != null && !Number.isNaN(v));
+  const semOutliers = removerOutliersIQR(limpos);
+
+  return {
+    valor: mediana(semOutliers),
+    amostrasTotal: limpos.length,
+    amostrasUsadas: semOutliers.length
+  };
+}
+
+async function buscarProducao(iniStr,fimStr){
+  const r = await fetch(`${API}/producao${paramsComDatas(iniStr,fimStr)}`);
+  const d = await r.json();
+  return calcularCamposProducao(d.rows || []);
+}
+
+async function calcularBaselineHistoricoRobusto(base, qtdJanelas){
+  const janelas = gerarJanelasHistoricas(base, qtdJanelas);
+
+  const resultados = await Promise.all(
+    janelas.map(j => buscarProducao(j.ini,j.fim).catch(() => []))
+  );
+
+  const mapaValores = new Map();
+
+  resultados.forEach(linhas => {
+    linhas.forEach(r => {
+      const chave = chaveSistema(r);
+
+      if(!mapaValores.has(chave)){
+        mapaValores.set(chave, {
+          gerencia: r.gerencia, polo: r.polo, cidade: r.cidade, sistema: r.sistema,
+          vazao: [], producao: [], horas: []
+        });
+      }
+
+      const o = mapaValores.get(chave);
+      const vz = numNull(r.vazao_ls);
+      const pd = numNull(r.media_dia);
+      const hd = numNull(r.horas_dia);
+
+      if(vz != null) o.vazao.push(vz);
+      if(pd != null) o.producao.push(pd);
+      if(hd != null) o.horas.push(hd);
+    });
+  });
+
+  const baseline = [];
+
+  mapaValores.forEach(o => {
+    const mVazao = medianaRobusta(o.vazao);
+    const mProducao = medianaRobusta(o.producao);
+    const mHoras = medianaRobusta(o.horas);
+
+    baseline.push({
+      gerencia: o.gerencia, polo: o.polo, cidade: o.cidade, sistema: o.sistema,
+      vazao_ls: mVazao.valor,
+      media_dia: mProducao.valor,
+      horas_dia: mHoras.valor,
+      amostras: Math.max(mVazao.amostrasTotal, mProducao.amostrasTotal, mHoras.amostrasTotal),
+      outliersDescartados:
+        (mVazao.amostrasTotal - mVazao.amostrasUsadas) +
+        (mProducao.amostrasTotal - mProducao.amostrasUsadas) +
+        (mHoras.amostrasTotal - mHoras.amostrasUsadas)
+    });
+  });
+
+  return baseline;
+}
+
 async function carregarDesvios(){
   const tbody = document.querySelector("#tbl-desvios tbody");
   const metodo = document.getElementById("desvio-metodo").value;
+  const qtdJanelas = Math.max(4, Number(document.getElementById("desvio-qtd-periodos").value) || 12);
   const base = obterPeriodoBase();
 
-  const baseline = metodo === "historico"
-    ? calcularPeriodoHistorico(base)
-    : calcularPeriodoAnterior(base);
+  document.getElementById("desvio-qtd-periodos").parentElement.style.display =
+    metodo === "historico" ? "" : "none";
 
-  document.getElementById("desvio-periodo-info").textContent =
-    `Período atual: ${formatarDataBR(base.ini)} a ${formatarDataBR(base.fim)} · Base de comparação: ${formatarDataBR(baseline.ini)} a ${formatarDataBR(baseline.fim)}`;
+  const chaveCache = metodo === "historico"
+    ? `desvios_historico_${qtdJanelas}_${base.ini}_${base.fim}_${params()}`
+    : `desvios_anterior_${base.ini}_${base.fim}_${params()}`;
 
-  const chaveCache = `desvios_${metodo}_${base.ini}_${base.fim}_${params()}`;
   const cacheado = lerCache(chaveCache);
 
   if(cacheado?.dados){
@@ -1691,18 +1815,35 @@ async function carregarDesvios(){
   }
 
   try{
-    const [rAtual, rBase] = await Promise.all([
-      fetch(`${API}/producao${paramsComDatas(base.ini,base.fim)}`),
-      fetch(`${API}/producao${paramsComDatas(baseline.ini,baseline.fim)}`)
-    ]);
+    const linhasAtual = await buscarProducao(base.ini, base.fim);
+    let merged;
 
-    const dAtual = await rAtual.json();
-    const dBase = await rBase.json();
+    if(metodo === "historico"){
+      const baseline = await calcularBaselineHistoricoRobusto(base, qtdJanelas);
+      merged = mesclarDesvios(linhasAtual, baseline);
 
-    const linhasAtual = calcularCamposProducao(dAtual.rows || []);
-    const linhasBase = calcularCamposProducao(dBase.rows || []);
+      const mapaBaseline = new Map();
+      baseline.forEach(b => mapaBaseline.set(chaveSistema(b), b));
 
-    const merged = mesclarDesvios(linhasAtual, linhasBase);
+      merged = merged.map(r => {
+        const b = mapaBaseline.get(chaveSistema(r));
+        return {
+          ...r,
+          amostras: b ? b.amostras : 0,
+          outliersDescartados: b ? b.outliersDescartados : 0
+        };
+      });
+
+      document.getElementById("desvio-periodo-info").textContent =
+        `Período atual: ${formatarDataBR(base.ini)} a ${formatarDataBR(base.fim)} · Base: mediana robusta de até ${qtdJanelas} períodos anteriores equivalentes (outliers descartados via IQR)`;
+    }else{
+      const baseline_ = calcularPeriodoAnterior(base);
+      const linhasBase = await buscarProducao(baseline_.ini, baseline_.fim);
+      merged = mesclarDesvios(linhasAtual, linhasBase);
+
+      document.getElementById("desvio-periodo-info").textContent =
+        `Período atual: ${formatarDataBR(base.ini)} a ${formatarDataBR(base.fim)} · Base de comparação: ${formatarDataBR(baseline_.ini)} a ${formatarDataBR(baseline_.fim)}`;
+    }
 
     dadosDesviosBrutos = merged;
     salvarCache(chaveCache, merged);
@@ -1760,6 +1901,8 @@ function renderizarTabelaDesvios(veioDeCache, salvoEm){
 
     if(pior == null && subidaVazaoOuProducao === -Infinity){
       status = "Sem dados p/ comparar"; classe = "badge-blue";
+    }else if(r.amostras != null && r.amostras > 0 && r.amostras < 3){
+      status = "Poucas amostras"; classe = "badge-blue";
     }else if(pior != null && pior <= -limiar){
       status = "Possível perda"; classe = "badge-red";
     }else if(suspeitaVazamento){
@@ -1789,7 +1932,7 @@ function renderizarTabelaDesvios(veioDeCache, salvoEm){
       <td>${escapeHtml(r.cidade || "")}</td>
       <td>${escapeHtml(r.sistema || "")}</td>
       <td>${r.vazaoAtual != null ? fmt4(r.vazaoAtual) : "—"}</td>
-      <td>${r.vazaoBase != null ? fmt4(r.vazaoBase) : "—"}</td>
+      <td${r.amostras ? ` title="Mediana calculada com ${r.amostras} amostra(s)${r.outliersDescartados ? `, ${r.outliersDescartados} descartada(s) como outlier` : ""}"` : ""}>${r.vazaoBase != null ? fmt4(r.vazaoBase) : "—"}</td>
       <td>${fmtDelta(r.deltaVazao)}</td>
       <td>${r.producaoAtual != null ? fmt2(r.producaoAtual) : "—"}</td>
       <td>${r.producaoBase != null ? fmt2(r.producaoBase) : "—"}</td>
