@@ -589,6 +589,7 @@ tr:hover td{background:var(--surface2)}
             <th onclick="sortTable('tbl-producao',6)">Média Diária m³</th>
             <th onclick="sortTable('tbl-producao',7)">Vazão Média L/s</th>
             <th onclick="sortTable('tbl-producao',8)">H/D</th>
+            <th onclick="sortTable('tbl-producao',9)">Cálculo</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -1164,10 +1165,41 @@ function renderizarProducao(d, veioDeCache, salvoEm){
       <td>${r.media_dia != null ? fmt2(r.media_dia) : "—"}</td>
       <td>${r.vazao_ls != null ? fmt4(r.vazao_ls) : "—"}</td>
       <td>${r.horas_dia != null ? fmt2(r.horas_dia) : "—"}</td>
+      <td>${badgeCalculoEspecial(r)}</td>
     </tr>
   `).join("");
 
   renderizarGraficosProducao(rows);
+}
+
+function badgeCalculoEspecial(r){
+  const tipo = String(r.tipo_regra_calculo || "SEM_REGRA").toUpperCase();
+  const pct = numNull(r.percentual_desconto);
+  const ajuste = numNull(r.ajuste_particularidades);
+
+  if(tipo === "SEM_REGRA" || tipo === ""){
+    return `<span class="badge badge-green">Normal</span>`;
+  }
+
+  const rotulos = {
+    DESCONTO_PERCENTUAL: "Desconto %",
+    SUBTRAIR_MACRO_PROCESSO: "Subtrai Macro Proc.",
+    SUBTRAIR_SAIDA2: "Subtrai Saída 2"
+  };
+
+  const rotulo = rotulos[tipo] || tipo;
+
+  let detalhe = "";
+
+  if(tipo === "DESCONTO_PERCENTUAL" && pct != null){
+    detalhe = `${(pct * 100).toLocaleString("pt-BR",{maximumFractionDigits:2})}% de desconto`;
+  }else if(ajuste != null && ajuste !== 0){
+    detalhe = `Ajuste: ${ajuste > 0 ? "-" : "+"}${fmt2(Math.abs(ajuste))} m³`;
+  }
+
+  const tip = detalhe ? `${rotulo} — ${detalhe}` : rotulo;
+
+  return `<span class="badge badge-yellow" title="${escapeHtml(tip)}">⚠ ${escapeHtml(rotulo)}</span>`;
 }
 
 function calcularCamposProducao(rows){
