@@ -1173,6 +1173,17 @@ function renderizarProducao(d, veioDeCache, salvoEm){
 }
 
 function badgeCalculoEspecial(r){
+  // Prioridade 1: possível troca/reset de macro medidor no meio do período.
+  // Sinal: o backend não conseguiu calcular produção pela diferença dos
+  // extremos (producao_extremos == null, indicando val_fim < val_ini),
+  // mas ainda existe produção calculada (via soma das leituras do ETL).
+  const producaoExtremos = numNull(r.producao_extremos);
+  const producaoBackend = numNull(r.producao);
+
+  if(producaoExtremos == null && producaoBackend != null && producaoBackend !== 0){
+    return `<span class="badge badge-red" title="Não foi possível calcular pela diferença entre a primeira e a última leitura do macro medidor (leitura final menor que a inicial) — indica possível reset ou troca de equipamento no meio do período">⚠ Possível troca de macro</span>`;
+  }
+
   const tipo = String(r.tipo_regra_calculo || "SEM_REGRA").toUpperCase();
   const pct = numNull(r.percentual_desconto);
   const ajuste = numNull(r.ajuste_particularidades);
